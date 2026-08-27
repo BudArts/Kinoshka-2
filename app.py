@@ -24,7 +24,6 @@ from UI.views.HomeView import HomeView
 from UI.views.LibraryView import LibraryView
 from UI.views.FilmsView import FilmsView
 from UI.views.MusicView import MusicView
-from UI.views.PlannedViews import JarvisView
 from UI.views.PlayerView import PlayerView
 from UI.views.ProfileView import ProfileView
 from UI.views.SettingsView import SettingsView
@@ -180,7 +179,6 @@ class App:
             "video": lambda: VideoView(self.session, self),
             "films": lambda: FilmsView(self.session, self),
             "music": lambda: MusicView(self.session, self),
-            "jarvis": lambda: JarvisView(self.session, self),
             "history": lambda: HistoryView(self.session, self),
             "settings": lambda: SettingsView(self.session, self),
             "player": lambda: PlayerView(self.session, self),

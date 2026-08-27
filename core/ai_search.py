@@ -17,9 +17,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-import requests
-
 from config import settings
+from core.llm import LLMError, get_llm
 
 log = logging.getLogger(__name__)
 
@@ -103,15 +102,16 @@ class SearchIntent:
 class AISearch:
     """Разбор запросов на естественном языке."""
 
-    def __init__(self):
-        self._session = requests.Session()
-
     # ------------------------------------------------------------------ #
     @property
     def enabled(self) -> bool:
-        return bool(settings.get("ai_enabled")) and bool(
-            (settings.get("ai_api_key") or "").strip()
-        )
+        """ИИ включён и у выбранного провайдера заданы ключи."""
+        if not settings.get("ai_enabled"):
+            return False
+        try:
+            return get_llm().is_configured()
+        except Exception:
+            return False
 
     def parse(self, query: str) -> SearchIntent:
         """Разобрать запрос. Никогда не бросает исключений."""
@@ -131,55 +131,22 @@ class AISearch:
     #  Через LLM
     # ------------------------------------------------------------------ #
     def _parse_with_ai(self, query: str) -> Optional[SearchIntent]:
-        base_url = (settings.get("ai_base_url") or "").rstrip("/")
-        api_key = (settings.get("ai_api_key") or "").strip()
-        model = settings.get("ai_model") or "gpt-4o-mini"
-
-        if not base_url or not api_key:
-            return None
-
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": query},
-            ],
-            "temperature": 0.3,
-            "max_tokens": 500,
-            # Не все совместимые сервисы поддерживают этот параметр,
-            # поэтому ответ всё равно парсится устойчиво.
-            "response_format": {"type": "json_object"},
-        }
-
+        """Разобрать запрос языковой моделью. None — если не получилось."""
         try:
-            response = self._session.post(
-                f"{base_url}/chat/completions",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                timeout=TIMEOUT,
-            )
-        except requests.RequestException as exc:
-            log.warning("ИИ-поиск: сеть недоступна (%s)", exc)
+            content = get_llm().complete(SYSTEM_PROMPT, query)
+        except LLMError as exc:
+            log.warning("ИИ-поиск недоступен: %s", exc)
+            return None
+        except Exception as exc:
+            log.warning("ИИ-поиск: непредвиденная ошибка (%s)", exc)
             return None
 
-        if response.status_code == 401:
-            log.warning("ИИ-поиск: неверный ключ API")
-            return None
-        if response.status_code != 200:
-            log.warning("ИИ-поиск: сервис ответил %s", response.status_code)
-            return None
-
-        try:
-            content = response.json()["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, ValueError) as exc:
-            log.warning("ИИ-поиск: неожиданный формат ответа (%s)", exc)
+        if not content:
             return None
 
         data = self._extract_json(content)
         if not data:
+            log.warning("ИИ-поиск: модель вернула не JSON")
             return None
 
         intent = SearchIntent(

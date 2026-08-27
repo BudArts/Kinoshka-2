@@ -21,7 +21,6 @@ NAV_ITEMS = [
     (ft.Icons.VIDEO_LIBRARY, "Мои видео", "my_video"),
     (ft.Icons.VIDEO_FILE, "Мои фильмы", "my_films"),
     (ft.Icons.LIBRARY_MUSIC, "Моя музыка", "my_music"),
-    (ft.Icons.ELECTRIC_BOLT, "Джарвис", "jarvis"),
     (ft.Icons.HISTORY_ROUNDED, "История", "history"),
     (ft.Icons.SETTINGS_ROUNDED, "Настройки", "settings"),
 ]

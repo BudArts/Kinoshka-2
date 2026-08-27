@@ -6,7 +6,6 @@ from UI.views.HistoryView import HistoryView
 from UI.views.HomeView import HomeView
 from UI.views.LibraryView import LibraryView
 from UI.views.MusicView import MusicView
-from UI.views.PlannedViews import JarvisView
 from UI.views.PlayerView import PlayerView
 from UI.views.ProfileView import ProfileView
 from UI.views.SettingsView import SettingsView
@@ -18,7 +17,6 @@ __all__ = [
     "VideoView",
     "FilmsView",
     "MusicView",
-    "JarvisView",
     "LibraryView",
     "HistoryView",
     "PlayerView",

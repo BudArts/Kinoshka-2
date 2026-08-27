@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import subprocess
@@ -26,7 +27,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-from config import VPN_DIR, settings
+from config import ASSETS_DIR, VPN_DIR, settings
+
+log = logging.getLogger(__name__)
+
+#: Конфигурации, вшитые в программу (assets/vpn) — работают сразу после установки.
+BUNDLED_VPN_DIR = ASSETS_DIR / "vpn"
 
 #: Проверочный URL: если он открывается, значит выход в YouTube есть.
 CHECK_URL = "https://www.youtube.com/generate_204"
@@ -152,6 +158,44 @@ class VpnManager:
             except VpnError:
                 continue
         return imported
+
+    def install_bundled(self) -> List[VpnConfig]:
+        """Скопировать вшитые в программу конфигурации в каталог пользователя.
+
+        Вызывается при первом запуске, чтобы VPN работал сразу после установки
+        и человеку не пришлось ничего импортировать вручную. Уже существующие
+        файлы не трогаем — пользователь мог их удалить осознанно, поэтому
+        повторно навязывать не нужно.
+        """
+        source_dir = BUNDLED_VPN_DIR
+        if not source_dir.is_dir():
+            return []
+
+        installed: List[VpnConfig] = []
+        for path in sorted(source_dir.glob("*.conf")):
+            target = self.config_dir / path.name
+            if target.exists():
+                continue
+            try:
+                shutil.copy2(path, target)
+                try:
+                    target.chmod(0o600)
+                except OSError:
+                    pass
+                installed.append(self._parse_config(target))
+            except OSError as exc:
+                log.warning("Не удалось установить пресет %s: %s", path.name, exc)
+
+        if installed and not settings.get("vpn_active_config"):
+            settings.set("vpn_active_config", installed[0].name)
+        return installed
+
+    def ensure_bundled_installed(self) -> None:
+        """Один раз за всё время развернуть вшитые конфигурации."""
+        if settings.get("vpn_bundled_installed"):
+            return
+        self.install_bundled()
+        settings.set("vpn_bundled_installed", True)
 
     def delete_config(self, name: str) -> None:
         if self._active == name:

@@ -102,6 +102,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "embed_thumbnail": True,
     # --- сеть / VPN ---
     "vpn_enabled": False,
+    "vpn_bundled_installed": False,  # развёрнуты ли вшитые пресеты
     "vpn_active_config": None,         # имя конфигурации в VPN_DIR
     "vpn_auto_connect": True,          # поднимать туннель перед запросами к YouTube
     "vpn_only_for": ["youtube"],       # для каких источников нужен VPN
@@ -109,6 +110,15 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "request_timeout": 20,
     # --- ИИ-поиск ---
     "ai_enabled": False,
+    "ai_provider": "gigachat",          # gigachat / openai
+    # GigaChat (Сбер): ключ Basic из личного кабинета
+    "gigachat_credentials": "",
+    "gigachat_scope": "GIGACHAT_API_PERS",
+    "gigachat_model": "GigaChat",
+    # Сертификаты GigaChat подписаны Минцифры и обычно отсутствуют
+    # в системном хранилище, поэтому по умолчанию проверку TLS не делаем.
+    "gigachat_verify_ssl": False,
+    # OpenAI-совместимый сервис
     "ai_base_url": "https://api.openai.com/v1",
     "ai_api_key": "",
     "ai_model": "gpt-4o-mini",

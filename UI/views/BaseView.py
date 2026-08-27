@@ -137,6 +137,8 @@ class BaseView:
             wrap=True,
             spacing=12,
             run_spacing=12,
+            # По верху — иначе карточки разной высоты дают рваные ряды.
+            vertical_alignment=ft.CrossAxisAlignment.START,
         )
 
     def media_row(
@@ -160,6 +162,7 @@ class BaseView:
             spacing=12,
             scroll=ft.ScrollMode.AUTO,
             wrap=False,
+            vertical_alignment=ft.CrossAxisAlignment.START,
         )
 
     def _card_width(self) -> int:

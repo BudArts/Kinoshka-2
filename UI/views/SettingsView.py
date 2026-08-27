@@ -30,6 +30,7 @@ class SettingsView(BaseView):
         super().__init__(session, app)
         self._file_picker: Optional[ft.FilePicker] = None
         self._vpn_status_text = ft.Text("", size=13, color=COLORS["muted"])
+        self._ai_status_text = ft.Text("", size=13, color=COLORS["muted"])
         self._vpn_list = ft.Column(spacing=8)
 
     # ------------------------------------------------------------------ #
@@ -576,20 +577,88 @@ class SettingsView(BaseView):
             self.app.toast(f"Папка загрузок: {folder}")
 
     def _ai_card(self) -> ft.Control:
+        """Настройки ИИ-поиска: выбор провайдера и его ключи."""
+        provider = (settings.get("ai_provider") or "gigachat").lower()
+
+        def switch_provider(e):
+            settings.set("ai_provider", e.control.value)
+            self._load()  # перерисовываем — поля у провайдеров разные
+
+        provider_dropdown = ft.Dropdown(
+            value=provider,
+            options=[
+                ft.DropdownOption(key="gigachat", text="GigaChat (Сбер)"),
+                ft.DropdownOption(key="openai", text="OpenAI-совместимый"),
+            ],
+            width=220,
+            border_radius=10,
+            bgcolor=COLORS["surface_alt"],
+            border_color=ft.Colors.TRANSPARENT,
+            color=ft.Colors.WHITE,
+            on_select=switch_provider,
+        )
+
+        if provider == "gigachat":
+            provider_fields: List[ft.Control] = [
+                self._row(
+                    "Авторизационный ключ",
+                    self._text_input("gigachat_credentials", password=True),
+                    "Ключ Basic из личного кабинета GigaChat",
+                ),
+                self._row(
+                    "Область доступа",
+                    self._dropdown(
+                        "gigachat_scope",
+                        ["GIGACHAT_API_PERS", "GIGACHAT_API_B2B", "GIGACHAT_API_CORP"],
+                        240,
+                    ),
+                    "PERS — для физлиц",
+                ),
+                self._row(
+                    "Модель",
+                    self._dropdown(
+                        "gigachat_model", ["GigaChat", "GigaChat-Pro", "GigaChat-Max"], 200
+                    ),
+                ),
+                self._row(
+                    "Проверять сертификат",
+                    self._switch("gigachat_verify_ssl"),
+                    "Сертификаты GigaChat подписаны Минцифры; если они "
+                    "не установлены в системе, проверку нужно выключить",
+                ),
+            ]
+        else:
+            provider_fields = [
+                self._row("Адрес API", self._text_input("ai_base_url")),
+                self._row("Ключ API", self._text_input("ai_api_key", password=True)),
+                self._row("Модель", self._text_input("ai_model", width=220)),
+            ]
+
         return self._card(
             "Поиск с ИИ и метаданные",
             ft.Icons.AUTO_AWESOME_ROUNDED,
             ft.Text(
                 "Умный поиск понимает запросы вроде «комедия про роботов с высоким "
-                "рейтингом». Нужен ключ OpenAI-совместимого API. Без ключа поиск "
-                "работает по упрощённому разбору запроса — жанры, годы и рейтинг "
-                "определяются по ключевым словам.",
+                "рейтингом». Без ключа поиск тоже работает — жанры, годы и рейтинг "
+                "определяются по ключевым словам, просто менее точно.",
                 size=13, color=COLORS["muted"],
             ),
             self._row("Включить ИИ-поиск", self._switch("ai_enabled")),
-            self._row("Адрес API", self._text_input("ai_base_url")),
-            self._row("Ключ API", self._text_input("ai_api_key", password=True)),
-            self._row("Модель", self._text_input("ai_model", width=220)),
+            self._row("Сервис", provider_dropdown),
+            *provider_fields,
+            ft.Row(
+                controls=[
+                    OutlineButton(
+                        "Проверить связь с ИИ",
+                        icon=ft.Icons.NETWORK_CHECK_ROUNDED,
+                        on_click=lambda e: self._check_ai(),
+                    ),
+                    self._ai_status_text,
+                ],
+                spacing=12,
+                wrap=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
             ft.Divider(height=1, color=ft.Colors.with_opacity(0.08, ft.Colors.WHITE)),
             ft.Text(
                 "Кинопоиск добавляет к фильмам рейтинг, постер, год и жанры. "
@@ -603,6 +672,32 @@ class SettingsView(BaseView):
                 "kinopoisk.dev — бесплатный тариф",
             ),
         )
+
+    def _check_ai(self) -> None:
+        """Проверка связи с языковой моделью — в фоне, чтобы не морозить окно."""
+        self._set_ai_status("Проверяем…", COLORS["warning"])
+
+        def work():
+            from core.llm import get_llm
+
+            try:
+                return get_llm().check()
+            except Exception as exc:
+                return False, str(exc)[:200]
+
+        def done(result):
+            ok, message = result
+            self._set_ai_status(message, COLORS["success"] if ok else COLORS["error"])
+
+        threading.Thread(target=lambda: done(work()), daemon=True).start()
+
+    def _set_ai_status(self, text: str, color: str) -> None:
+        self._ai_status_text.value = text
+        self._ai_status_text.color = color
+        try:
+            self._ai_status_text.update()
+        except Exception:
+            pass
 
     def _data_card(self) -> ft.Control:
         return self._card(

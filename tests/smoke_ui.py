@@ -67,7 +67,6 @@ from UI.views.HomeView import HomeView
 from UI.views.VideoView import VideoView
 from UI.views.FilmsView import FilmsView
 from UI.views.MusicView import MusicView
-from UI.views.PlannedViews import JarvisView
 from UI.views.LibraryView import LibraryView
 from UI.views.HistoryView import HistoryView
 from UI.views.SettingsView import SettingsView
@@ -105,9 +104,26 @@ web_item = MediaItem(id="w1", title="Фильм из интернета", url="h
 check("FilmsView shell", lambda: (lambda v: (v._build_shell(), v._render(film_items, "Результаты")))(mk(FilmsView)))
 check("FilmsView web-источник", lambda: (lambda v: (v._build_shell(), v._render(film_items + [web_item], "Результаты")))(mk(FilmsView)))
 check("FilmsView пусто", lambda: (lambda v: (v._build_shell(), v._render([], "x")))(mk(FilmsView)))
-check("MusicView shell", lambda: (lambda v: (v._build_shell(), v._render(items, "Треки")))(mk(MusicView)))
+music_items = [MediaItem(id=f"m{i}", title=f"Трек {i}", url=f"https://youtu.be/m{i}",
+                         content_type="music", author="Исполнитель", duration=210,
+                         thumbnail="https://lh3.googleusercontent.com/x=w60-h60",
+                         extra={"square_cover": True, "album": "Альбом"})
+               for i in range(4)]
+
+def check_square_cards():
+    """У музыки обложка квадратная, у видео — 16:9."""
+    from UI.components.MediaCard import MediaCard
+    music_card = MediaCard(music_items[0], width=200)
+    video_card = MediaCard(items[0], width=200)
+    assert music_card._square is True
+    assert video_card._square is False
+    # у музыки нет кнопки «только звук» — она бессмысленна
+    assert len(music_card._actions_row().controls) == 2
+    assert len(video_card._actions_row().controls) == 3
+
+check("MediaCard: квадрат для музыки", check_square_cards)
+check("MusicView shell", lambda: (lambda v: (v._build_shell(), v._render(music_items, "Треки")))(mk(MusicView)))
 check("MusicView пусто", lambda: (lambda v: (v._build_shell(), v._render([], "x")))(mk(MusicView)))
-check("JarvisView", lambda: mk(JarvisView).on_show())
 check("LibraryView video", lambda: mk(LibraryView, "video", "Мои видео")._load())
 check("LibraryView music empty", lambda: mk(LibraryView, "music", "Моя музыка")._load())
 check("HistoryView", lambda: mk(HistoryView)._load())
