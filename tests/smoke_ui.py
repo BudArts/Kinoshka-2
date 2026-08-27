@@ -65,7 +65,9 @@ app.appbar = AppBar()
 
 from UI.views.HomeView import HomeView
 from UI.views.VideoView import VideoView
-from UI.views.PlannedViews import FilmsView, MusicView, JarvisView
+from UI.views.FilmsView import FilmsView
+from UI.views.MusicView import MusicView
+from UI.views.PlannedViews import JarvisView
 from UI.views.LibraryView import LibraryView
 from UI.views.HistoryView import HistoryView
 from UI.views.SettingsView import SettingsView
@@ -94,8 +96,17 @@ check("HomeView build+static", lambda: mk(HomeView)._static_blocks())
 check("HomeView feed render", lambda: (lambda v: (v._feed_placeholder(), v._render_feed(items)))(mk(HomeView)))
 check("VideoView shell+render", lambda: (lambda v: (v._build_shell(), v._render(items, "Результаты")))(mk(VideoView)))
 check("VideoView empty", lambda: (lambda v: (v._build_shell(), v._render([], "x")))(mk(VideoView)))
-check("FilmsView", lambda: mk(FilmsView).on_show())
-check("MusicView", lambda: mk(MusicView).on_show())
+film_items = [MediaItem(id=f"kp{i}", title=f"Фильм {i}", url=f"https://rutube.ru/video/{i}/",
+                        platform="rutube", content_type="film", rating=7.5, year=2024,
+                        duration=5400, categories=["комедия"]) for i in range(4)]
+web_item = MediaItem(id="w1", title="Фильм из интернета", url="https://example.com/v",
+                     platform="web", content_type="film")
+
+check("FilmsView shell", lambda: (lambda v: (v._build_shell(), v._render(film_items, "Результаты")))(mk(FilmsView)))
+check("FilmsView web-источник", lambda: (lambda v: (v._build_shell(), v._render(film_items + [web_item], "Результаты")))(mk(FilmsView)))
+check("FilmsView пусто", lambda: (lambda v: (v._build_shell(), v._render([], "x")))(mk(FilmsView)))
+check("MusicView shell", lambda: (lambda v: (v._build_shell(), v._render(items, "Треки")))(mk(MusicView)))
+check("MusicView пусто", lambda: (lambda v: (v._build_shell(), v._render([], "x")))(mk(MusicView)))
 check("JarvisView", lambda: mk(JarvisView).on_show())
 check("LibraryView video", lambda: mk(LibraryView, "video", "Мои видео")._load())
 check("LibraryView music empty", lambda: mk(LibraryView, "music", "Моя музыка")._load())
@@ -103,6 +114,43 @@ check("HistoryView", lambda: mk(HistoryView)._load())
 check("SettingsView", lambda: (lambda v: (v._ensure_file_picker(), v._load()))(mk(SettingsView)))
 check("PlayerView render", lambda: mk(PlayerView)._render(items[0], "https://example.com/v.mp4"))
 check("PlayerView no stream", lambda: mk(PlayerView)._render(items[0], None))
+
+# --- ядро: разбор запросов ИИ-поиском без сети ---
+from core.ai_search import ai_search
+
+def check_intent():
+    cases = {
+        "комедия про роботов 2020 с высоким рейтингом": ("комедия", 2020, 7.0),
+        "страшный сериал 2015-2018": ("ужасы", 2015, None),
+    }
+    for query, (genre, year, rating) in cases.items():
+        intent = ai_search.parse(query)
+        assert genre in intent.genres, f"{query}: жанр {intent.genres}"
+        assert intent.year_from == year, f"{query}: год {intent.year_from}"
+        if rating:
+            assert intent.min_rating == rating, f"{query}: рейтинг {intent.min_rating}"
+        assert intent.queries, f"{query}: пустые запросы"
+    assert ai_search.parse("страшный сериал 2015-2018").content_type == "series"
+
+check("AISearch эвристика", check_intent)
+
+# --- провайдеры создаются и деградируют без сети ---
+from core.providers.rutube import RuTubeProvider
+from core.providers.film import FilmProvider
+from core.providers.music import MusicProvider
+from core.providers.web import WebSearchProvider
+
+check("RuTube.extract_video_id", lambda: (lambda r: (
+    r.extract_video_id("https://rutube.ru/video/" + "a"*32 + "/") == "a"*32
+    or (_ for _ in ()).throw(AssertionError("id не распознан"))))(RuTubeProvider()))
+check("RuTube._guess_type", lambda: (
+    RuTubeProvider._guess_type("Сериал 1 сезон 2 серия") == "series"
+    and RuTubeProvider._guess_type("Обычный фильм") == "film"
+    or (_ for _ in ()).throw(AssertionError("тип определён неверно"))))
+check("provider_for", lambda: (
+    isinstance(sess.provider_for("film"), FilmProvider)
+    and isinstance(sess.provider_for("music"), MusicProvider)
+    or (_ for _ in ()).throw(AssertionError("не тот провайдер"))))
 
 sess.shutdown()
 print("\nОШИБОК:", fails)

@@ -112,6 +112,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "ai_base_url": "https://api.openai.com/v1",
     "ai_api_key": "",
     "ai_model": "gpt-4o-mini",
+    # --- метаданные фильмов ---
+    "kinopoisk_api_key": "",           # бесплатный ключ с kinopoisk.dev
     # --- рекомендации ---
     "recommendations_count": 24,
     "interest_decay_days": 30,

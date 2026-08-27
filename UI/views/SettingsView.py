@@ -576,17 +576,31 @@ class SettingsView(BaseView):
 
     def _ai_card(self) -> ft.Control:
         return self._card(
-            "Поиск с ИИ",
+            "Поиск с ИИ и метаданные",
             ft.Icons.AUTO_AWESOME_ROUNDED,
             ft.Text(
                 "Умный поиск понимает запросы вроде «комедия про роботов с высоким "
-                "рейтингом». Нужен ключ OpenAI-совместимого API.",
+                "рейтингом». Нужен ключ OpenAI-совместимого API. Без ключа поиск "
+                "работает по упрощённому разбору запроса — жанры, годы и рейтинг "
+                "определяются по ключевым словам.",
                 size=13, color=COLORS["muted"],
             ),
             self._row("Включить ИИ-поиск", self._switch("ai_enabled")),
             self._row("Адрес API", self._text_input("ai_base_url")),
             self._row("Ключ API", self._text_input("ai_api_key", password=True)),
             self._row("Модель", self._text_input("ai_model", width=220)),
+            ft.Divider(height=1, color=ft.Colors.with_opacity(0.08, ft.Colors.WHITE)),
+            ft.Text(
+                "Кинопоиск добавляет к фильмам рейтинг, постер, год и жанры. "
+                "Бесплатный ключ выдаётся на kinopoisk.dev — без него раздел "
+                "работает, но без этих данных.",
+                size=13, color=COLORS["muted"],
+            ),
+            self._row(
+                "Ключ Кинопоиска",
+                self._text_input("kinopoisk_api_key", password=True),
+                "kinopoisk.dev — бесплатный тариф",
+            ),
         )
 
     def _data_card(self) -> ft.Control:

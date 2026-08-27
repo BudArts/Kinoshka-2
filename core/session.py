@@ -14,6 +14,8 @@ from config import settings
 from core.downloader import download_manager
 from core.media import MediaItem
 from core.profile_service import ProfileService
+from core.providers.film import FilmProvider
+from core.providers.music import MusicProvider
 from core.providers.youtube import YouTubeProvider
 from core.recomendation_engine import RecommendationEngine
 from core.vpn import vpn_manager
@@ -34,6 +36,8 @@ class AppSession:
         self.profiles = ProfileService()
 
         self.youtube = YouTubeProvider(vpn=self.vpn)
+        self.films = FilmProvider(vpn=self.vpn)
+        self.music = MusicProvider(vpn=self.vpn)
 
         self._user: Optional[User] = None
         self._lock = threading.RLock()
@@ -105,8 +109,16 @@ class AppSession:
     #  Контент
     # ------------------------------------------------------------------ #
     def provider_for(self, content_type: str):
-        """Провайдер под тип контента. Пока реализован YouTube."""
-        return self.youtube
+        """Провайдер под тип контента.
+
+        film/series ведут в FilmProvider (RuTube + веб-поиск + Кинопоиск),
+        music — в MusicProvider, всё остальное — обычный YouTube.
+        """
+        return {
+            "film": self.films,
+            "series": self.films,
+            "music": self.music,
+        }.get(content_type, self.youtube)
 
     def search(
         self, query: str, content_type: str = "video", limit: int = 24

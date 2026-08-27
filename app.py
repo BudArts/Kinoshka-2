@@ -22,7 +22,9 @@ from UI.themes.DarkTheme import COLORS, FONT_BOLD
 from UI.views.HistoryView import HistoryView
 from UI.views.HomeView import HomeView
 from UI.views.LibraryView import LibraryView
-from UI.views.PlannedViews import FilmsView, JarvisView, MusicView
+from UI.views.FilmsView import FilmsView
+from UI.views.MusicView import MusicView
+from UI.views.PlannedViews import JarvisView
 from UI.views.PlayerView import PlayerView
 from UI.views.ProfileView import ProfileView
 from UI.views.SettingsView import SettingsView

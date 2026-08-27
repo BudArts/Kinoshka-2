@@ -1,8 +1,8 @@
 """Разделы, которые будут доработаны в следующих итерациях.
 
-Экраны уже подключены к навигации и переиспользуют логику VideoView, но
-провайдеры RuTube / Кинопоиска / музыки пока не реализованы — вместо пустого
-экрана пользователю честно объясняется, что готово, а что нет.
+Экран уже подключён к навигации и переиспользует логику VideoView, но
+соответствующий сервис пока не реализован — вместо пустого экрана
+пользователю честно объясняется, что готово, а что нет.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from typing import List, Optional
 
 import flet as ft
 
-from UI.components.Common import EmptyState, SearchField
 from UI.themes.DarkTheme import COLORS, FONT_BOLD
 from UI.views.VideoView import VideoView
 
@@ -48,7 +47,7 @@ class _PlannedView(VideoView):
                     ft.Text(
                         "Ядро приложения (профили, история, интересы, загрузчик, "
                         "плеер, VPN) уже работает и будет переиспользовано здесь. "
-                        "Осталось подключить источники:",
+                        "Осталось сделать:",
                         size=13, color=COLORS["muted"], width=520,
                         text_align=ft.TextAlign.CENTER,
                     ),
@@ -66,37 +65,6 @@ class _PlannedView(VideoView):
             alignment=ft.Alignment.CENTER,
             padding=30,
         )
-
-
-class FilmsView(_PlannedView):
-    """Фильмы и сериалы: RuTube, Кинопоиск, поиск по интернету, ИИ-поиск."""
-
-    title = "Фильмы и сериалы"
-    content_type = "film"
-    source_name = "RuTube"
-    icon = ft.Icons.CAMERA_ROLL_ROUNDED
-    roadmap = [
-        "Провайдер RuTube: поиск и получение потока через yt-dlp",
-        "Парсер Кинопоиска: рейтинги, постеры, год, жанры, актуальные новинки",
-        "Запасной поиск по интернету, когда фильма нет на RuTube",
-        "ИИ-поиск по смыслу запроса (OpenAI-совместимый API из настроек)",
-        "Отслеживание серий: «продолжить с 4 серии 2 сезона»",
-    ]
-
-
-class MusicView(_PlannedView):
-    """Музыка: поиск треков, плейлисты, скачивание в mp3."""
-
-    title = "Музыка"
-    content_type = "music"
-    source_name = "Музыка"
-    icon = ft.Icons.LIBRARY_MUSIC_ROUNDED
-    roadmap = [
-        "Поиск треков и альбомов через YouTube Music и другие источники",
-        "Аудиоплеер с очередью, перемешиванием и повтором",
-        "Скачивание в mp3 с обложкой и тегами (постпроцессор уже готов)",
-        "Плейлисты пользователя и рекомендации по жанрам",
-    ]
 
 
 class JarvisView(_PlannedView):
