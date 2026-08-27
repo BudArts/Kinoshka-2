@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Данные приложения (не должны попадать в репозиторий)
+*.db
+*.db-wal
+*.db-shm
+settings.json
+logs/
+downloads/
+cache/
+
+# VPN-конфигурации содержат приватные ключи — никогда не коммитим
+vpn/
+*.conf
+
+# Сборка
+build/
+dist/
+*.spec.bak
+installer_output/
+.devdata/

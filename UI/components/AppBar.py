@@ -1,40 +1,167 @@
-from UI.themes.DarkTheme import DarkTheme
-import flet as ft
-import flet_gradient_text as fgt
+"""Верхняя панель: логотип, статус VPN и меню профиля."""
 
-class AppBar(ft.AppBar):
-    def __init__(self):
-        self._theme = DarkTheme()
-        gradient = ft.LinearGradient(
+from __future__ import annotations
+
+from typing import Callable, Optional
+
+import flet as ft
+
+from UI.themes.DarkTheme import COLORS, FONT_BOLD, brand_gradient
+
+
+def gradient_text(
+    text: str, size: int = 28, font_family: str = FONT_BOLD
+) -> ft.Control:
+    """Текст, залитый фирменным градиентом.
+
+    Реализовано штатным ShaderMask: внешняя библиотека flet-gradient-text
+    несовместима с Flet 0.86 (использует удалённый API ft.margin.only).
+    BlendMode.SRC_IN заливает градиентом непрозрачные пиксели текста,
+    поэтому сам текст должен быть белым.
+    """
+    return ft.ShaderMask(
+        shader=ft.LinearGradient(
             begin=ft.Alignment.TOP_LEFT,
             end=ft.Alignment.BOTTOM_RIGHT,
-            colors=[
-                self._theme._main_colors["gradient1"],
-                self._theme._main_colors["gradient2"]
+            colors=[COLORS["gradient1"], COLORS["gradient2"]],
+        ),
+        blend_mode=ft.BlendMode.SRC_IN,
+        content=ft.Text(
+            text,
+            size=size,
+            color=ft.Colors.WHITE,
+            font_family=font_family,
+            no_wrap=True,
+        ),
+    )
+
+
+class AppBar(ft.AppBar):
+    """Панель приложения с индикатором VPN и кнопкой профиля."""
+
+    def __init__(
+        self,
+        on_profile_click: Optional[Callable] = None,
+        on_switch_user: Optional[Callable] = None,
+        on_settings: Optional[Callable] = None,
+        on_menu_toggle: Optional[Callable] = None,
+        user_name: str = "Профиль",
+    ):
+        self._on_profile_click = on_profile_click
+
+        # --- заголовок --------------------------------------------------
+        title: ft.Control = gradient_text("K i n o s h k a", size=28)
+
+        # --- индикатор VPN ----------------------------------------------
+        self.vpn_icon = ft.Icon(ft.Icons.SHIELD_OUTLINED, size=18, color=COLORS["muted"])
+        self.vpn_text = ft.Text("VPN выкл.", size=12, color=COLORS["muted"])
+        self.vpn_indicator = ft.Container(
+            content=ft.Row([self.vpn_icon, self.vpn_text], spacing=6, tight=True),
+            padding=ft.Padding(10, 6, 10, 6),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.WHITE),
+            tooltip="Состояние VPN-туннеля",
+            on_click=lambda e: on_settings() if on_settings else None,
+        )
+
+        # --- меню профиля ------------------------------------------------
+        self.profile_button = ft.PopupMenuButton(
+            content=ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Container(
+                            width=32,
+                            height=32,
+                            border_radius=16,
+                            gradient=brand_gradient(),
+                            alignment=ft.Alignment.CENTER,
+                            content=ft.Text(
+                                (user_name or "?")[:1].upper(),
+                                color=ft.Colors.WHITE,
+                                size=15,
+                                font_family=FONT_BOLD,
+                            ),
+                        ),
+                        ft.Text(user_name, color=ft.Colors.WHITE, size=14),
+                        ft.Icon(ft.Icons.ARROW_DROP_DOWN, color=ft.Colors.WHITE, size=18),
+                    ],
+                    spacing=8,
+                    tight=True,
+                ),
+                padding=ft.Padding(8, 4, 8, 4),
+                border_radius=20,
+            ),
+            items=[
+                ft.PopupMenuItem(
+                    content=ft.Text("Мой профиль"),
+                    icon=ft.Icons.PERSON_ROUNDED,
+                    on_click=lambda e: on_profile_click() if on_profile_click else None,
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("Сменить аккаунт"),
+                    icon=ft.Icons.SWITCH_ACCOUNT_ROUNDED,
+                    on_click=lambda e: on_switch_user() if on_switch_user else None,
+                ),
+                ft.PopupMenuItem(),
+                ft.PopupMenuItem(
+                    content=ft.Text("Настройки"),
+                    icon=ft.Icons.SETTINGS_ROUNDED,
+                    on_click=lambda e: on_settings() if on_settings else None,
+                ),
             ],
-            stops=[0.0, 2.0]
         )
-        
-        self.tit = fgt.GradientText(
-            text="K i n o s h k a",
-            animate=True,
-            gradient=gradient,
-            text_size=30,
-            duration=0.1,
-            text_style=ft.TextStyle(
-                font_family="B"
-            )    
-        )
-        
+
+        leading = None
+        if on_menu_toggle:
+            leading = ft.IconButton(
+                icon=ft.Icons.MENU_ROUNDED,
+                icon_color=ft.Colors.WHITE,
+                tooltip="Свернуть меню",
+                on_click=lambda e: on_menu_toggle(),
+            )
+
         super().__init__(
-            title=self.tit,
+            leading=leading,
+            leading_width=56 if leading else None,
+            title=title,
             center_title=True,
-            toolbar_opacity=1,
+            toolbar_height=58,
+            bgcolor=COLORS["dark_gray"],
             actions=[
-                ft.IconButton(
-                    icon=ft.Icons.PERSON,
-                    icon_color=ft.Colors.WHITE,
-                )
+                self.vpn_indicator,
+                ft.Container(width=10),
+                self.profile_button,
+                ft.Container(width=10),
             ],
-            toolbar_height=50,
         )
+
+    # ------------------------------------------------------------------ #
+    def set_vpn_status(self, status: str, name: Optional[str] = None) -> None:
+        """Обновить индикатор: connected / disconnected / error / off."""
+        presets = {
+            "connected": (ft.Icons.SHIELD_ROUNDED, COLORS["success"], f"VPN: {name or 'вкл.'}"),
+            "disconnected": (ft.Icons.SHIELD_OUTLINED, COLORS["muted"], "VPN выкл."),
+            "off": (ft.Icons.SHIELD_OUTLINED, COLORS["muted"], "VPN выкл."),
+            "connecting": (ft.Icons.SHIELD_MOON_ROUNDED, COLORS["warning"], "Подключение…"),
+            "error": (ft.Icons.GPP_BAD_ROUNDED, COLORS["error"], "Ошибка VPN"),
+        }
+        icon, color, text = presets.get(status, presets["disconnected"])
+        self.vpn_icon.name = icon
+        self.vpn_icon.color = color
+        self.vpn_text.value = text
+        self.vpn_text.color = color
+        try:
+            self.vpn_indicator.update()
+        except Exception:
+            pass
+
+    def set_user(self, user_name: str) -> None:
+        """Перерисовать кнопку профиля после смены аккаунта."""
+        row = self.profile_button.content.content
+        avatar, label = row.controls[0], row.controls[1]
+        avatar.content.value = (user_name or "?")[:1].upper()
+        label.value = user_name
+        try:
+            self.profile_button.update()
+        except Exception:
+            pass
