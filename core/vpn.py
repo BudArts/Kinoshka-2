@@ -32,10 +32,19 @@ from config import VPN_DIR, settings
 CHECK_URL = "https://www.youtube.com/generate_204"
 CHECK_TIMEOUT = 8
 
+#: Параметры обфускации AmneziaWG. Обычный wg-quick на них падает с ошибкой
+#: «Unrecognized key», поэтому такие конфиги поднимаются через awg-quick.
+AMNEZIA_KEYS = {
+    "jc", "jmin", "jmax",
+    "s1", "s2", "s3", "s4",
+    "h1", "h2", "h3", "h4",
+    "i1", "i2", "i3", "i4", "i5",
+}
+
 
 @dataclass
 class VpnConfig:
-    """Разобранная WireGuard-конфигурация."""
+    """Разобранная конфигурация WireGuard или AmneziaWG."""
 
     name: str
     path: Path
@@ -43,6 +52,9 @@ class VpnConfig:
     address: Optional[str] = None
     dns: Optional[str] = None
     allowed_ips: Optional[str] = None
+    #: True, если в конфиге есть параметры обфускации AmneziaWG.
+    #: Такие файлы обычный wg-quick не примет — нужен awg-quick.
+    amnezia: bool = False
 
     @property
     def location_hint(self) -> str:
@@ -50,6 +62,11 @@ class VpnConfig:
         if not self.endpoint:
             return "неизвестно"
         return self.endpoint.rsplit(":", 1)[0]
+
+    @property
+    def kind(self) -> str:
+        """Подпись типа туннеля для интерфейса."""
+        return "AmneziaWG" if self.amnezia else "WireGuard"
 
 
 class VpnError(RuntimeError):
@@ -151,7 +168,7 @@ class VpnManager:
 
     @staticmethod
     def _parse_config(path: Path) -> VpnConfig:
-        """Достать из .conf поля, интересные для отображения."""
+        """Достать из .conf поля, интересные для отображения и запуска."""
         config = VpnConfig(name=path.stem, path=path)
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
@@ -172,6 +189,9 @@ class VpnManager:
                 config.dns = value
             elif key == "allowedips":
                 config.allowed_ips = value
+            elif key in AMNEZIA_KEYS:
+                # Параметры обфускации есть только у AmneziaWG.
+                config.amnezia = True
         return config
 
     # ------------------------------------------------------------------ #
@@ -186,24 +206,60 @@ class VpnManager:
         return self._active is not None
 
     @staticmethod
-    def backend_available() -> bool:
-        """Установлен ли системный клиент WireGuard."""
-        return VpnManager._backend_binary() is not None
+    def backend_available(amnezia: bool = False) -> bool:
+        """Установлен ли нужный клиент (WireGuard или AmneziaWG)."""
+        return VpnManager._backend_binary(amnezia) is not None
 
     @staticmethod
-    def _backend_binary() -> Optional[str]:
+    def _backend_binary(amnezia: bool = False) -> Optional[str]:
+        """Путь к клиенту под нужный тип туннеля.
+
+        AmneziaWG — форк WireGuard с обфускацией трафика; его конфиги
+        содержат параметры Jc/S1/H1/I1, которые обычный wg-quick не понимает.
+        """
         if sys.platform == "win32":
-            found = shutil.which("wireguard")
-            if found:
-                return found
-            for candidate in (
-                r"C:\Program Files\WireGuard\wireguard.exe",
-                r"C:\Program Files (x86)\WireGuard\wireguard.exe",
-            ):
+            names = ("amneziawg", "amnezia-wg") if amnezia else ("wireguard",)
+            paths = (
+                (
+                    r"C:\Program Files\AmneziaWG\amneziawg.exe",
+                    r"C:\Program Files\AmneziaVPN\amneziawg.exe",
+                )
+                if amnezia
+                else (
+                    r"C:\Program Files\WireGuard\wireguard.exe",
+                    r"C:\Program Files (x86)\WireGuard\wireguard.exe",
+                )
+            )
+            for name in names:
+                found = shutil.which(name)
+                if found:
+                    return found
+            for candidate in paths:
                 if Path(candidate).is_file():
                     return candidate
             return None
-        return shutil.which("wg-quick")
+
+        return shutil.which("awg-quick") if amnezia else shutil.which("wg-quick")
+
+    @staticmethod
+    def backend_hint(amnezia: bool = False) -> str:
+        """Подсказка пользователю, чего не хватает."""
+        if VpnManager.backend_available(amnezia):
+            return (
+                "Клиент AmneziaWG найден."
+                if amnezia
+                else "Клиент WireGuard найден."
+            )
+        if amnezia:
+            return (
+                "Конфигурации используют AmneziaWG (обфускация трафика). "
+                "Обычный WireGuard их не запустит — установите AmneziaWG "
+                "с amnezia.org или используйте прокси."
+            )
+        return (
+            "Клиент WireGuard не найден. Установите его с wireguard.com "
+            "или укажите прокси в настройках."
+        )
 
     # ------------------------------------------------------------------ #
     #  Подключение / отключение
@@ -224,17 +280,15 @@ class VpnManager:
             if self._active:
                 self.disconnect()
 
-            binary = self._backend_binary()
+            binary = self._backend_binary(config.amnezia)
             if binary is None:
-                raise VpnError(
-                    "Клиент WireGuard не найден. Установите WireGuard "
-                    "или укажите прокси в настройках."
-                )
+                raise VpnError(self.backend_hint(config.amnezia))
 
             if sys.platform == "win32":
                 command = [binary, "/installtunnelservice", str(config.path)]
             else:
-                command = ["wg-quick", "up", str(config.path)]
+                tool = "awg-quick" if config.amnezia else "wg-quick"
+                command = [tool, "up", str(config.path)]
 
             result = self._run(command)
             if result.returncode != 0:
@@ -256,12 +310,13 @@ class VpnManager:
                 return
             name = self._active
             config = self.get_config(name)
-            binary = self._backend_binary()
+            binary = self._backend_binary(config.amnezia if config else False)
             if binary and config:
                 if sys.platform == "win32":
                     command = [binary, "/uninstalltunnelservice", name]
                 else:
-                    command = ["wg-quick", "down", str(config.path)]
+                    tool = "awg-quick" if config.amnezia else "wg-quick"
+                    command = [tool, "down", str(config.path)]
                 self._run(command)
             self._active = None
             self._notify("disconnected", name)

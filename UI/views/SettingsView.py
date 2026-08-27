@@ -236,20 +236,20 @@ class SettingsView(BaseView):
     def _vpn_card(self) -> ft.Control:
         self._refresh_vpn_list()
 
-        backend_ok = vpn_manager.backend_available()
-        backend_note = (
-            "Системный клиент WireGuard найден."
-            if backend_ok
-            else "Клиент WireGuard не найден. Установите его с wireguard.com "
-                 "или используйте прокси ниже."
-        )
+        # Подсказка зависит от того, какие конфигурации импортированы:
+        # AmneziaWG требует своего клиента, обычный WireGuard — своего.
+        configs = vpn_manager.list_configs()
+        needs_amnezia = any(c.amnezia for c in configs)
+        backend_ok = vpn_manager.backend_available(needs_amnezia)
+        backend_note = vpn_manager.backend_hint(needs_amnezia)
 
         return self._card(
             "VPN для YouTube",
             ft.Icons.VPN_LOCK_ROUNDED,
             ft.Text(
                 "В России YouTube не открывается напрямую. Импортируйте .conf-файлы "
-                "WireGuard — приложение будет поднимать туннель само перед запросами.",
+                "WireGuard или AmneziaWG — приложение будет поднимать туннель само "
+                "перед запросами.",
                 size=13, color=COLORS["muted"],
             ),
             StatusChip(
@@ -326,8 +326,9 @@ class SettingsView(BaseView):
                                     controls=[
                                         ft.Text(config.name, size=14,
                                                 color=ft.Colors.WHITE),
-                                        ft.Text(f"сервер: {config.location_hint}",
-                                                size=12, color=COLORS["muted"]),
+                                        ft.Text(
+                                            f"{config.kind} • сервер: {config.location_hint}",
+                                            size=12, color=COLORS["muted"]),
                                     ],
                                     spacing=1, expand=True, tight=True,
                                 ),

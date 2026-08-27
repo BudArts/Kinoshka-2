@@ -147,6 +147,34 @@ check("RuTube._guess_type", lambda: (
     RuTubeProvider._guess_type("Сериал 1 сезон 2 серия") == "series"
     and RuTubeProvider._guess_type("Обычный фильм") == "film"
     or (_ for _ in ()).throw(AssertionError("тип определён неверно"))))
+# --- VPN: различение WireGuard и AmneziaWG ---
+import tempfile
+from core.vpn import VpnManager
+
+def check_vpn_kinds():
+    """Конфиги с параметрами Jc/S1/H1 требуют awg-quick, а не wg-quick."""
+    tmp = Path(tempfile.mkdtemp())
+    plain = tmp / "plain.conf"
+    plain.write_text(
+        "[Interface]\nPrivateKey = x\nAddress = 10.0.0.2/32\n"
+        "[Peer]\nPublicKey = y\nEndpoint = 1.2.3.4:51820\nAllowedIPs = 0.0.0.0/0\n"
+    )
+    amnezia = tmp / "amnezia.conf"
+    amnezia.write_text(
+        "[Interface]\nPrivateKey = x\nAddress = 172.16.0.2\nJc = 4\nJmin = 40\n"
+        "S1 = 0\nH1 = 1\n[Peer]\nPublicKey = y\nEndpoint = 8.8.8.8:891\n"
+        "AllowedIPs = 0.0.0.0/0\n"
+    )
+    m = VpnManager(config_dir=tmp)
+    kinds = {c.name: (c.kind, c.amnezia, c.endpoint) for c in m.list_configs()}
+    assert kinds["plain"][0] == "WireGuard", kinds["plain"]
+    assert kinds["amnezia"][0] == "AmneziaWG", kinds["amnezia"]
+    assert kinds["amnezia"][2] == "8.8.8.8:891", kinds["amnezia"]
+    # подсказка должна отличаться для двух типов
+    assert "AmneziaWG" in VpnManager.backend_hint(True)
+
+check("VPN: WireGuard vs AmneziaWG", check_vpn_kinds)
+
 check("provider_for", lambda: (
     isinstance(sess.provider_for("film"), FilmProvider)
     and isinstance(sess.provider_for("music"), MusicProvider)
