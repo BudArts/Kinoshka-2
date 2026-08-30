@@ -7,7 +7,7 @@ from typing import Callable, Optional
 import flet as ft
 
 from core.media import MediaItem
-from UI.themes.DarkTheme import ANIM_FAST, COLORS, FONT_BOLD, brand_gradient
+from UI.themes.DarkTheme import COLORS, FONT_BOLD
 
 
 class MusicCard(ft.Container):
@@ -16,64 +16,32 @@ class MusicCard(ft.Container):
         self._on_play = on_play
         self._on_download = on_download
 
-        cover = self._build_cover(width)
+        if item.thumbnail:
+            cover = ft.Image(src=item.thumbnail, width=width, height=width, fit=ft.BoxFit.COVER, border_radius=ft.BorderRadius(12, 12, 12, 12))
+        else:
+            cover = ft.Container(width=width, height=width, bgcolor=COLORS["surface_alt"], border_radius=12, alignment=ft.Alignment.CENTER, content=ft.Icon(ft.Icons.MUSIC_NOTE_ROUNDED, color=COLORS["muted"], size=36))
 
-        title = ft.Text(item.title, size=14, color=ft.Colors.WHITE, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS, font_family=FONT_BOLD)
-        subtitle = ft.Text(self._subtitle(), size=12, color=COLORS["muted"], max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
-
-        info = ft.Container(
-            content=ft.Column(controls=[title, subtitle], spacing=2, tight=True),
-            height=48,
-            padding=ft.Padding(2, 0, 2, 0),
-        )
-
-        # Кнопки — только скачать и играть аудио, без видео
-        actions = ft.Row(
-            controls=[
-                ft.IconButton(icon=ft.Icons.PLAY_ARROW_ROUNDED, icon_color=ft.Colors.WHITE, icon_size=20, tooltip="Слушать", on_click=self._play),
-                ft.IconButton(icon=ft.Icons.DOWNLOAD_ROUNDED, icon_color=COLORS["muted"], icon_size=18, tooltip="Скачать mp3", on_click=self._download),
-            ],
-            spacing=0,
-        )
+        title = ft.Text(item.title, size=13, color=ft.Colors.WHITE, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS, font_family=FONT_BOLD)
+        subtitle = ft.Text(item.author or "", size=11, color=COLORS["muted"], max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
 
         super().__init__(
-            content=ft.Column(controls=[cover, info, actions], spacing=6, tight=True),
+            content=ft.Column(controls=[cover, title, subtitle, self._actions()], spacing=4, tight=True),
             width=width,
-            padding=8,
-            border_radius=14,
-            bgcolor=ft.Colors.TRANSPARENT,
-            on_click=self._play,
-            tooltip=item.title,
-        )
-
-    def _build_cover(self, width: int) -> ft.Control:
-        placeholder = ft.Container(
-            width=width,
-            height=width,
+            bgcolor=COLORS["surface"],
             border_radius=12,
-            gradient=brand_gradient(),
-            alignment=ft.Alignment.CENTER,
-            content=ft.Icon(ft.Icons.MUSIC_NOTE_ROUNDED, color=ft.Colors.WHITE, size=40),
+            padding=6,
+            on_click=self._play,
         )
 
-        if self.item.thumbnail:
-            return ft.Container(
-                width=width,
-                height=width,
-                border_radius=12,
-                clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                content=ft.Stack(
-                    controls=[
-                        placeholder,
-                        ft.Image(src=self.item.thumbnail, width=width, height=width, fit=ft.BoxFit.COVER, border_radius=12, error_content=placeholder),
-                    ]
-                ),
-            )
-        return placeholder
-
-    def _subtitle(self) -> str:
-        parts = [self.item.author, self.item.extra.get("album")]
-        return " • ".join([p for p in parts if p])
+    def _actions(self):
+        return ft.Row(
+            controls=[
+                ft.IconButton(icon=ft.Icons.PLAY_ARROW_ROUNDED, icon_color=ft.Colors.WHITE, icon_size=18, tooltip="Слушать", on_click=self._play),
+                ft.IconButton(icon=ft.Icons.DOWNLOAD_ROUNDED, icon_color=COLORS["muted"], icon_size=16, tooltip="Скачать", on_click=self._download),
+            ],
+            spacing=0,
+            tight=True,
+        )
 
     def _play(self, e=None):
         if self._on_play:

@@ -27,15 +27,14 @@ COLORS = {
 FONT_REGULAR = "A"
 FONT_BOLD = "B"
 
-#: Стандартная анимация интерфейса.
-ANIM = ft.Animation(duration=250, curve=ft.AnimationCurve.EASE_OUT)
-ANIM_FAST = ft.Animation(duration=150, curve=ft.AnimationCurve.EASE_OUT)
+# Убраны анимации для скорости и чтобы не было серых артефактов
+ANIM = None
+ANIM_FAST = None
 
 
 def brand_gradient(
     begin: ft.Alignment | None = None, end: ft.Alignment | None = None
 ) -> ft.LinearGradient:
-    """Фирменный красно-оранжевый градиент."""
     return ft.LinearGradient(
         begin=begin or ft.Alignment.BOTTOM_LEFT,
         end=end or ft.Alignment.TOP_RIGHT,

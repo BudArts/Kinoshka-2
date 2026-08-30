@@ -1,15 +1,4 @@
-"""Провайдер YouTube на базе yt-dlp.
-
-Официальный Data API требует ключ и квоты, поэтому используется yt-dlp:
-он же нужен для скачивания, так что зависимость одна на всё.
-
-Особенности реализации:
-  * все сетевые вызовы проходят через VpnManager.ensure_connected(), т.к. в
-    России YouTube без туннеля недоступен;
-  * поиск и списки тянутся в «плоском» режиме (extract_flat) — это на порядок
-    быстрее, полные метаданные догружаются только для открытого видео;
-  * при сетевой ошибке делается одна попытка со сменой VPN-конфигурации.
-"""
+"""YouTube провайдер — максимально простой и быстрый, Piped первым."""
 
 from __future__ import annotations
 
@@ -27,37 +16,27 @@ from core.vpn import vpn_manager
 
 log = logging.getLogger(__name__)
 
-#: Ленты, из которых берётся «холодный старт» рекомендаций.
-TRENDING_URL = "https://www.youtube.com/feed/trending"
-
 _YOUTUBE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
+TRENDING_URL = "https://www.youtube.com/feed/trending"
 
 
 class YouTubeProvider(BaseProvider):
-    """Поиск, рекомендации и метаданные YouTube."""
-
     name = "youtube"
     content_type = "video"
-    requires_vpn = True
+    requires_vpn = False  # теперь пробуем без VPN через Piped
 
     def __init__(self, vpn=None):
         self.vpn = vpn or vpn_manager
 
-    # ------------------------------------------------------------------ #
-    #  Настройки yt-dlp
-    # ------------------------------------------------------------------ #
     def _base_opts(self, **overrides: Any) -> Dict[str, Any]:
         opts: Dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
             "skip_download": True,
-            "socket_timeout": settings.get("request_timeout", 12),
-            "extractor_args": {
-                "youtube": {"player_client": ["web", "android", "mweb"]},
-            },
+            "socket_timeout": 8,
             "retries": 1,
-            "fragment_retries": 1,
+            "extractor_args": {"youtube": {"player_client": ["web"]}},
         }
         proxy = self.vpn.proxy_url()
         if proxy:
@@ -65,82 +44,54 @@ class YouTubeProvider(BaseProvider):
         opts.update(overrides)
         return opts
 
-    def _ensure_network(self) -> None:
-        """Поднять VPN, если он включён в настройках."""
-        if self.requires_vpn:
-            self.vpn.ensure_connected()
-
     def _extract(self, target: str, opts: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Обёртка над yt-dlp с одной повторной попыткой через другой туннель."""
-        self._ensure_network()
         try:
             with YoutubeDL(opts) as ydl:
                 return ydl.extract_info(target, download=False)
-        except (DownloadError, ExtractorError) as exc:
-            log.warning("yt-dlp не смог обработать %s: %s", target, exc)
-            # Возможно, конкретный выходной узел заблокирован — пробуем другой.
-            if settings.get("vpn_enabled") and self.vpn.rotate():
-                try:
-                    with YoutubeDL(opts) as ydl:
-                        return ydl.extract_info(target, download=False)
-                except Exception as retry_exc:
-                    log.warning("Повтор после смены VPN не помог: %s", retry_exc)
-            return None
-        except Exception as exc:  # неожиданные ошибки не должны ронять UI
-            log.exception("Ошибка обращения к YouTube: %s", exc)
+        except Exception as exc:
+            log.debug("yt-dlp fail %s: %s", target, exc)
             return None
 
-    # ------------------------------------------------------------------ #
-    #  Публичный интерфейс
-    # ------------------------------------------------------------------ #
     def search(self, query: str, limit: int = 20) -> List[MediaItem]:
         query = (query or "").strip()
         if not query:
             return []
-
         if self._looks_like_url(query):
+            # прямая ссылка — пробуем получить инфо
             item = self.get_item(query)
             if item:
                 return [item]
-            # пробуем через piped как fallback для прямых ссылок
-            piped = self._search_via_piped(query, limit=1)
-            if piped:
-                return piped
-            return []
+            # если это youtube id, делаем объект без сети
+            vid = self.extract_video_id(query)
+            if vid:
+                return [MediaItem(id=vid, title=query, url=f"https://www.youtube.com/watch?v={vid}", platform="youtube", content_type="video", thumbnail=f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg")]
 
-        # Сначала пробуем yt-dlp
+        # 1. Piped — быстро и без VPN
+        piped = self._search_via_piped(query, limit=limit)
+        if piped:
+            return piped
+
+        # 2. yt-dlp как fallback
         info = self._extract(f"ytsearch{int(limit)}:{query}", self._base_opts(extract_flat=True))
         items = self._entries_to_items(info)
         if items:
             return items
-
-        # Fallback — Piped API (работает без VPN в России у многих)
-        log.info("YouTube через yt-dlp не ответил, пробуем Piped: %s", query)
-        piped_items = self._search_via_piped(query, limit=limit)
-        if piped_items:
-            return piped_items
 
         return []
 
     def _search_via_piped(self, query: str, limit: int = 20) -> List[MediaItem]:
         import requests
 
-        # Piped + Invidious — работают без VPN у многих провайдеров
-        piped_instances = [
+        instances = [
             "https://pipedapi.kavin.rocks",
             "https://pipedapi.tokhmi.xyz",
             "https://api.piped.projectsegfau.lt",
-        ]
-        invidious_instances = [
-            "https://yewtu.be",
-            "https://invidious.flokinet.to",
-            "https://invidious.protokolla.fi",
+            "https://pipedapi.syncpundit.io",
         ]
 
-        # 1. Piped
-        for base in piped_instances:
+        for base in instances:
             try:
-                r = requests.get(f"{base}/search", params={"q": query}, timeout=6, proxies=self.vpn.requests_proxies())
+                r = requests.get(f"{base}/search", params={"q": query}, timeout=5, proxies=self.vpn.requests_proxies())
                 if r.status_code != 200:
                     continue
                 data = r.json()
@@ -149,7 +100,13 @@ class YouTubeProvider(BaseProvider):
                 for entry in items[:limit]:
                     if not entry or entry.get("type") != "stream":
                         continue
-                    vid = entry.get("url", "").split("=")[-1].split("/")[-1]
+                    # url вида /watch?v=xxx
+                    url = entry.get("url") or ""
+                    vid = ""
+                    if "v=" in url:
+                        vid = url.split("v=")[-1].split("&")[0]
+                    else:
+                        vid = url.split("/")[-1]
                     if not vid or len(vid) < 5:
                         continue
                     result.append(
@@ -160,145 +117,123 @@ class YouTubeProvider(BaseProvider):
                             platform="youtube",
                             content_type="video",
                             author=entry.get("uploaderName") or "",
-                            thumbnail=entry.get("thumbnail") or "",
+                            thumbnail=entry.get("thumbnail") or f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
                             duration=int(entry.get("duration")) if entry.get("duration") else None,
-                            view_count=int(entry.get("views")) if entry.get("views") else None,
                         )
                     )
                 if result:
-                    log.info("Piped %s видео: %s", len(result), query)
                     return result
-            except Exception as exc:
-                log.debug("Piped %s: %s", base, exc)
+            except Exception:
                 continue
-
-        # 2. Invidious
-        for base in invidious_instances:
-            try:
-                r = requests.get(f"{base}/api/v1/search", params={"q": query, "type": "video"}, timeout=6, proxies=self.vpn.requests_proxies())
-                if r.status_code != 200:
-                    continue
-                data = r.json()
-                result: List[MediaItem] = []
-                for entry in data[:limit]:
-                    vid = entry.get("videoId")
-                    if not vid:
-                        continue
-                    result.append(
-                        MediaItem(
-                            id=vid,
-                            title=entry.get("title") or "Без названия",
-                            url=f"https://www.youtube.com/watch?v={vid}",
-                            platform="youtube",
-                            content_type="video",
-                            author=entry.get("author") or "",
-                            thumbnail=f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
-                            duration=int(entry.get("lengthSeconds")) if entry.get("lengthSeconds") else None,
-                            view_count=int(entry.get("viewCount")) if entry.get("viewCount") else None,
-                        )
-                    )
-                if result:
-                    log.info("Invidious %s видео: %s", len(result), query)
-                    return result
-            except Exception as exc:
-                log.debug("Invidious %s: %s", base, exc)
-                continue
-
         return []
 
-    def recommendations(self, queries: List[str], limit: int = 24) -> List[MediaItem]:
-        """Лента рекомендаций — теперь параллельно, чтобы грузилось быстрее."""
+    def recommendations(self, queries: List[str], limit: int = 12) -> List[MediaItem]:
+        # Максимально просто: один запрос, без параллели
         if not queries:
             return self.trending(limit)
-
-        # Ограничиваем число запросов, чтобы не ддосить YouTube
-        queries = queries[:4]
-        per_query = max(2, limit // max(len(queries), 1))
-
-        collected: List[MediaItem] = []
-        seen: set[str] = set()
-
-        # Параллельный поиск по интересам — в 3-4 раза быстрее последовательного
-        import concurrent.futures
-
-        def search_one(q: str):
-            try:
-                return q, self.search(q, limit=per_query)
-            except Exception:
-                return q, []
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(queries))) as ex:
-            futures = [ex.submit(search_one, q) for q in queries]
-            for fut in concurrent.futures.as_completed(futures):
-                try:
-                    q, items = fut.result()
-                except Exception:
-                    continue
-                for item in items:
-                    if item.id in seen:
-                        continue
-                    seen.add(item.id)
-                    if q not in item.categories:
-                        item.categories.append(q)
-                    collected.append(item)
-                    if len(collected) >= limit:
-                        break
-                if len(collected) >= limit:
-                    break
-
-        if not collected:
-            return self.trending(limit)
-        return collected[:limit]
-
-    def trending(self, limit: int = 24) -> List[MediaItem]:
-        info = self._extract(
-            TRENDING_URL,
-            self._base_opts(extract_flat=True, playlistend=limit, noplaylist=False),
-        )
-        items = self._entries_to_items(info)[:limit]
+        q = queries[0]
+        items = self.search(q, limit=limit)
         if items:
-            return items
-        # Fallback — популярные запросы через Piped
-        log.info("Тренды YouTube не загрузились, используем Piped популярные")
-        return self._search_via_piped("топ видео", limit=limit)
+            return items[:limit]
+        return self.trending(limit)
+
+    def trending(self, limit: int = 12) -> List[MediaItem]:
+        # Пробуем Piped тренды
+        piped = self._search_via_piped("топ видео сегодня", limit=limit)
+        if piped:
+            return piped
+        # Fallback yt-dlp
+        info = self._extract(TRENDING_URL, self._base_opts(extract_flat=True, playlistend=limit, noplaylist=False))
+        return self._entries_to_items(info)[:limit]
 
     def get_item(self, video_id_or_url: str) -> Optional[MediaItem]:
-        """Полные метаданные одного видео (включая прямую ссылку на поток)."""
         url = self._to_url(video_id_or_url)
+        vid = self.extract_video_id(url) or self.extract_video_id(video_id_or_url)
+        # Сначала пробуем yt-dlp быстро
         info = self._extract(url, self._base_opts())
-        if not info:
-            return None
-        return self._info_to_item(info, full=True)
+        if info:
+            return self._info_to_item(info, full=True)
+        # Fallback — создаём минимальный объект без сети
+        if vid:
+            return MediaItem(
+                id=vid,
+                title=f"Видео {vid}",
+                url=f"https://www.youtube.com/watch?v={vid}",
+                platform="youtube",
+                content_type="video",
+                thumbnail=f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+            )
+        return None
 
     def get_stream_url(self, video_id_or_url: str, quality: str = "720p") -> Optional[str]:
-        """Прямая ссылка на поток нужного качества (video+audio одним файлом)."""
+        vid = self.extract_video_id(video_id_or_url) or self.extract_video_id(self._to_url(video_id_or_url))
+        if not vid:
+            vid = video_id_or_url
+
+        # 1. Piped streams — самый надёжный способ без VPN
+        stream = self._get_stream_via_piped(vid, quality)
+        if stream:
+            return stream
+
+        # 2. yt-dlp fallback
         url = self._to_url(video_id_or_url)
-        info = self._extract(
-            url, self._base_opts(format=self._format_selector(quality))
-        )
+        info = self._extract(url, self._base_opts(format=self._format_selector(quality)))
         if not info:
             return None
         return self._pick_stream(info)
 
-    def related(self, video_id_or_url: str, limit: int = 12) -> List[MediaItem]:
-        """Похожие видео.
+    def _get_stream_via_piped(self, video_id: str, quality: str = "720p") -> Optional[str]:
+        import requests
 
-        yt-dlp не отдаёт блок related напрямую, поэтому используем название
-        и автора исходного видео как поисковый запрос — практически это даёт
-        близкую выдачу.
-        """
+        instances = [
+            "https://pipedapi.kavin.rocks",
+            "https://pipedapi.tokhmi.xyz",
+            "https://api.piped.projectsegfau.lt",
+        ]
+        target_height = QUALITY_TO_HEIGHT.get(quality) or 720
+
+        for base in instances:
+            try:
+                r = requests.get(f"{base}/streams/{video_id}", timeout=6, proxies=self.vpn.requests_proxies())
+                if r.status_code != 200:
+                    continue
+                data = r.json()
+                # videoStreams
+                vstreams = data.get("videoStreams") or []
+                # ищем mp4 с нужной высотой
+                best = None
+                for vs in vstreams:
+                    if not vs.get("url"):
+                        continue
+                    # ищем прогрессивный (с аудио) или хотя бы видео
+                    h = vs.get("height") or 0
+                    if h <= target_height + 100:
+                        if best is None or h > (best.get("height") or 0):
+                            best = vs
+                if best and best.get("url"):
+                    return best["url"]
+                # fallback — любой url
+                if vstreams and vstreams[0].get("url"):
+                    return vstreams[0]["url"]
+                # пробуем audioStreams для музыки
+                astreams = data.get("audioStreams") or []
+                if astreams and astreams[0].get("url"):
+                    return astreams[0]["url"]
+            except Exception:
+                continue
+        return None
+
+    def related(self, video_id_or_url: str, limit: int = 8) -> List[MediaItem]:
+        # Просто поиск по первым словам названия
         item = self.get_item(video_id_or_url)
         if not item:
             return []
-        query = " ".join(filter(None, [item.author, *item.title.split()[:4]]))
-        return [r for r in self.search(query, limit=limit + 1) if r.id != item.id][:limit]
+        q = " ".join(item.title.split()[:3]) if item.title else "популярное"
+        return self.search(q, limit=limit)[:limit]
 
     def is_available(self) -> bool:
-        return self.vpn.check_connection()
+        return True
 
-    # ------------------------------------------------------------------ #
-    #  Преобразование ответов yt-dlp
-    # ------------------------------------------------------------------ #
     def _entries_to_items(self, info: Optional[Dict[str, Any]]) -> List[MediaItem]:
         if not info:
             return []
@@ -307,30 +242,24 @@ class YouTubeProvider(BaseProvider):
         for entry in entries:
             if not entry:
                 continue
-            # У вложенных плейлистов (например, на странице трендов)
-            # записи лежат ещё на уровень глубже.
             if entry.get("_type") == "playlist" and entry.get("entries"):
                 for nested in entry["entries"]:
-                    item = self._info_to_item(nested)
-                    if item:
-                        items.append(item)
+                    it = self._info_to_item(nested)
+                    if it:
+                        items.append(it)
                 continue
-            item = self._info_to_item(entry)
-            if item:
-                items.append(item)
+            it = self._info_to_item(entry)
+            if it:
+                items.append(it)
         return items
 
-    def _info_to_item(
-        self, info: Optional[Dict[str, Any]], full: bool = False
-    ) -> Optional[MediaItem]:
-        """Словарь yt-dlp -> MediaItem."""
+    def _info_to_item(self, info: Optional[Dict[str, Any]], full: bool = False) -> Optional[MediaItem]:
         if not info:
             return None
         video_id = info.get("id")
         title = info.get("title")
         if not video_id or not title or title in ("[Private video]", "[Deleted video]"):
             return None
-
         item = MediaItem(
             id=video_id,
             title=title,
@@ -342,46 +271,29 @@ class YouTubeProvider(BaseProvider):
             description=(info.get("description") or None) if full else None,
             duration=int(info["duration"]) if info.get("duration") else None,
             view_count=info.get("view_count"),
-            upload_date=info.get("upload_date"),
-            categories=list(info.get("categories") or []),
-            tags=list(info.get("tags") or [])[:15],
         )
         if full:
             item.stream_url = self._pick_stream(info)
-            item.extra["channel_id"] = info.get("channel_id")
-            item.extra["like_count"] = info.get("like_count")
         return item
 
     @staticmethod
     def _pick_thumbnail(info: Dict[str, Any]) -> Optional[str]:
-        """Наиболее подходящая превьюшка (не гигантская, но и не мыло)."""
         if info.get("thumbnail"):
             return info["thumbnail"]
         thumbnails = info.get("thumbnails") or []
         if not thumbnails:
-            video_id = info.get("id")
-            return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" if video_id else None
-        # Берём самую большую из тех, что не шире 640 px.
+            vid = info.get("id")
+            return f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if vid else None
         suitable = [t for t in thumbnails if (t.get("width") or 0) <= 640]
         best = max(suitable or thumbnails, key=lambda t: t.get("width") or 0)
         return best.get("url")
 
     @staticmethod
     def _pick_stream(info: Dict[str, Any]) -> Optional[str]:
-        """Ссылка на поток: сначала готовый url, иначе лучший совместимый формат."""
         if info.get("url"):
             return info["url"]
-
         formats = info.get("formats") or []
-        # Приоритет — прогрессивные mp4 (видео+звук в одном файле), их умеет
-        # проиграть любой встроенный плеер без склейки потоков.
-        progressive = [
-            f
-            for f in formats
-            if f.get("vcodec") not in (None, "none")
-            and f.get("acodec") not in (None, "none")
-            and f.get("url")
-        ]
+        progressive = [f for f in formats if f.get("vcodec") not in (None, "none") and f.get("acodec") not in (None, "none") and f.get("url")]
         if progressive:
             best = max(progressive, key=lambda f: f.get("height") or 0)
             return best.get("url")
@@ -392,24 +304,17 @@ class YouTubeProvider(BaseProvider):
 
     @staticmethod
     def _format_selector(quality: str) -> str:
-        """Строка выбора формата для yt-dlp по человеческому названию качества."""
         height = QUALITY_TO_HEIGHT.get(quality)
         if height is None:
             return "best[ext=mp4]/best"
-        return (
-            f"best[height<={height}][ext=mp4]/"
-            f"best[height<={height}]/"
-            f"bestvideo[height<={height}]+bestaudio/best"
-        )
+        return f"best[height<={height}][ext=mp4]/best[height<={height}]/bestvideo[height<={height}]+bestaudio/best"
 
-    # ------------------------------------------------------------------ #
     @staticmethod
     def _looks_like_url(value: str) -> bool:
         return value.startswith(("http://", "https://", "www."))
 
     @staticmethod
     def _to_url(video_id_or_url: str) -> str:
-        """Принять и ID, и полную ссылку."""
         value = (video_id_or_url or "").strip()
         if YouTubeProvider._looks_like_url(value):
             return value if value.startswith("http") else f"https://{value}"
@@ -419,14 +324,11 @@ class YouTubeProvider(BaseProvider):
 
     @staticmethod
     def extract_video_id(url: str) -> Optional[str]:
-        """Достать ID видео из любой формы ссылки YouTube."""
         if _YOUTUBE_ID_RE.match(url or ""):
             return url
-        patterns = (
-            r"(?:v=|/v/|youtu\.be/|/embed/|/shorts/|/live/)([A-Za-z0-9_-]{11})",
-        )
-        for pattern in patterns:
-            match = re.search(pattern, url or "")
-            if match:
-                return match.group(1)
+        patterns = (r"(?:v=|/v/|youtu\.be/|/embed/|/shorts/|/live/)([A-Za-z0-9_-]{11})",)
+        for pat in patterns:
+            m = re.search(pat, url or "")
+            if m:
+                return m.group(1)
         return None
