@@ -261,8 +261,7 @@ class SettingsView(BaseView):
             "О программе",
             ft.Icons.INFO_OUTLINE_ROUNDED,
             ft.Text(f"Kinoshka {APP_VERSION}", size=14, color=ft.Colors.WHITE),
-            ft.Text("Видео с YouTube, фильмы и сериалы с RuTube, музыка — онлайн и офлайн. Разработано Budin's industries.", size=13, color=COLORS["muted"]),
-            ft.Text("VPN работает автоматически в фоне, без кнопок. Если одна конфигурация отвалится — приложение переключится на другую.", size=12, color=COLORS["muted"]),
+            ft.Text("Видео с YouTube, фильмы и сериалы с RuTube, музыка с Яндекс Музыки — онлайн и офлайн. Разработано Budin's industries.", size=13, color=COLORS["muted"]),
         )
 
     def _password_dialog(self) -> None:

@@ -174,8 +174,7 @@ class BaseView:
     def offline_notice(self, source: str = "YouTube") -> ft.Control:
         return EmptyState(
             f"{source} недоступен",
-            "Похоже, нет соединения с источником. Проверьте интернет — VPN работает в фоне автоматически, "
-            "если одна конфигурация отвалится, приложение переключится на другую.",
+            "Похоже, нет соединения с источником. Проверьте интернет и попробуйте обновить.",
             icon=ft.Icons.WIFI_OFF_ROUNDED,
             action_text="Обновить",
             on_action=lambda: self.app.navigate("home"),

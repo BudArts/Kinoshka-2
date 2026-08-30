@@ -159,7 +159,7 @@ class HomeView(BaseView):
         if isinstance(items, Exception) or not items:
             body: ft.Control = EmptyState(
                 "Лента пока пуста",
-                "Не удалось получить видео. Проверьте интернет — VPN работает автоматически в фоне.",
+                "Не удалось получить видео. Проверьте интернет и попробуйте обновить.",
                 icon=ft.Icons.CLOUD_OFF_ROUNDED,
                 action_text="Обновить",
                 on_action=self._load,

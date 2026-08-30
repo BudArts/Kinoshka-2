@@ -110,7 +110,7 @@ class VideoView(BaseView):
                 self._set_results(
                     EmptyState(
                         f"По запросу «{self._query}» ничего не найдено",
-                        "Проверьте написание или попробуйте другой запрос. Если источник недоступен — проверьте интернет, VPN работает автоматически.",
+                        "Проверьте написание или попробуйте другой запрос.",
                         icon=ft.Icons.SEARCH_OFF_ROUNDED,
                         action_text="К рекомендациям",
                         on_action=self.load_feed,
