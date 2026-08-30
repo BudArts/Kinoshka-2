@@ -31,16 +31,19 @@ log = logging.getLogger(__name__)
 def _get_client():
     try:
         from yandex_music import Client
+        from yandex_music.utils.request import Request
     except ImportError:
         log.warning("Библиотека yandex-music не установлена")
         return None
 
     token = (settings.get("yandex_music_token") or "").strip()
     try:
+        # Таймаут 5 секунд, чтобы не висеть долго
+        request = Request(timeout=5)
         if token:
-            client = Client(token).init()
+            client = Client(token, request=request).init()
         else:
-            client = Client().init()
+            client = Client(request=request).init()
         return client
     except Exception as exc:
         log.warning("Не удалось инициализировать клиент Яндекс Музыки: %s", exc)
@@ -161,49 +164,24 @@ class YandexMusicProvider(BaseProvider):
             return []
 
     def recommendations(self, queries: List[str], limit: int = 24) -> List[MediaItem]:
-        # Лента — популярные подборки + по интересам
-        if not queries:
-            queries = ["популярная музыка", "русские хиты", "топ чарт"]
+        # Для скорости — один запрос, а не 4 параллельных
+        query = "популярная музыка"
+        if queries:
+            # берём первый интерес как запрос
+            query = queries[0]
 
-        queries = queries[:4]
-        per_query = max(2, limit // max(len(queries), 1))
-        collected: List[MediaItem] = []
-        seen: set[str] = set()
+        try:
+            items = self.search(query, limit=limit)
+            if items:
+                return items
+        except Exception as exc:
+            log.debug("Рекомендации Яндекс упали: %s", exc)
 
-        import concurrent.futures
-
-        def search_one(q: str):
-            try:
-                return q, self.search(q, limit=per_query)
-            except Exception:
-                return q, []
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(queries))) as ex:
-            futures = [ex.submit(search_one, q) for q in queries]
-            for fut in concurrent.futures.as_completed(futures):
-                try:
-                    q, items = fut.result()
-                except Exception:
-                    continue
-                for it in items:
-                    if it.id in seen:
-                        continue
-                    seen.add(it.id)
-                    if q not in it.categories:
-                        it.categories.append(q)
-                    collected.append(it)
-                    if len(collected) >= limit:
-                        break
-                if len(collected) >= limit:
-                    break
-
-        if not collected:
-            # Fallback — чарт
-            try:
-                return self.search("топ 100", limit=limit)
-            except Exception:
-                return []
-        return collected[:limit]
+        # Fallback — чарт
+        try:
+            return self.trending(limit=limit)
+        except Exception:
+            return []
 
     def trending(self, limit: int = 24) -> List[MediaItem]:
         # Пытаемся взять чарт, если API позволяет

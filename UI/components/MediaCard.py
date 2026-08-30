@@ -87,11 +87,6 @@ class MediaCard(ft.Container):
     #  Обложка
     # ------------------------------------------------------------------ #
     def _build_cover(self, width: int, height: int) -> ft.Control:
-        """Обложка с бейджем длительности и затемнением при наведении.
-
-        Под изображением всегда лежит фирменный градиент, поэтому пока
-        превью грузится (или если оно не открылось) не видно серых дыр.
-        """
         placeholder = ft.Container(
             width=width,
             height=height,
@@ -122,8 +117,7 @@ class MediaCard(ft.Container):
                     fit=ft.BoxFit.COVER,
                     border_radius=12,
                     gapless_playback=True,
-                    # Ошибку рисуем прозрачной: под ней уже лежит градиент.
-                    error_content=ft.Container(width=width, height=height),
+                    error_content=placeholder,
                 )
             )
         layers.append(self._duration_badge())
@@ -133,6 +127,7 @@ class MediaCard(ft.Container):
             width=width,
             height=height,
             border_radius=12,
+            bgcolor=ft.Colors.TRANSPARENT,
             clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
             content=ft.Stack(controls=layers),
         )

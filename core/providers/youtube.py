@@ -52,12 +52,12 @@ class YouTubeProvider(BaseProvider):
             "no_warnings": True,
             "noplaylist": True,
             "skip_download": True,
-            "socket_timeout": settings.get("request_timeout", 20),
+            "socket_timeout": settings.get("request_timeout", 12),
             "extractor_args": {
-                # web-клиент чаще всего отдаёт метаданные без проверки бота
-                "youtube": {"player_client": ["web", "android"]},
+                "youtube": {"player_client": ["web", "android", "mweb"]},
             },
-            "retries": 2,
+            "retries": 1,
+            "fragment_retries": 1,
         }
         proxy = self.vpn.proxy_url()
         if proxy:
@@ -94,21 +94,117 @@ class YouTubeProvider(BaseProvider):
     #  Публичный интерфейс
     # ------------------------------------------------------------------ #
     def search(self, query: str, limit: int = 20) -> List[MediaItem]:
-        """Поиск видео. Пустой результат означает недоступность источника."""
         query = (query or "").strip()
         if not query:
             return []
 
-        # Если пользователь вставил ссылку — сразу отдаём это видео.
         if self._looks_like_url(query):
             item = self.get_item(query)
-            return [item] if item else []
+            if item:
+                return [item]
+            # пробуем через piped как fallback для прямых ссылок
+            piped = self._search_via_piped(query, limit=1)
+            if piped:
+                return piped
+            return []
 
-        info = self._extract(
-            f"ytsearch{int(limit)}:{query}",
-            self._base_opts(extract_flat=True),
-        )
-        return self._entries_to_items(info)
+        # Сначала пробуем yt-dlp
+        info = self._extract(f"ytsearch{int(limit)}:{query}", self._base_opts(extract_flat=True))
+        items = self._entries_to_items(info)
+        if items:
+            return items
+
+        # Fallback — Piped API (работает без VPN в России у многих)
+        log.info("YouTube через yt-dlp не ответил, пробуем Piped: %s", query)
+        piped_items = self._search_via_piped(query, limit=limit)
+        if piped_items:
+            return piped_items
+
+        return []
+
+    def _search_via_piped(self, query: str, limit: int = 20) -> List[MediaItem]:
+        import requests
+
+        # Piped + Invidious — работают без VPN у многих провайдеров
+        piped_instances = [
+            "https://pipedapi.kavin.rocks",
+            "https://pipedapi.tokhmi.xyz",
+            "https://api.piped.projectsegfau.lt",
+        ]
+        invidious_instances = [
+            "https://yewtu.be",
+            "https://invidious.flokinet.to",
+            "https://invidious.protokolla.fi",
+        ]
+
+        # 1. Piped
+        for base in piped_instances:
+            try:
+                r = requests.get(f"{base}/search", params={"q": query}, timeout=6, proxies=self.vpn.requests_proxies())
+                if r.status_code != 200:
+                    continue
+                data = r.json()
+                items = data.get("items") or []
+                result: List[MediaItem] = []
+                for entry in items[:limit]:
+                    if not entry or entry.get("type") != "stream":
+                        continue
+                    vid = entry.get("url", "").split("=")[-1].split("/")[-1]
+                    if not vid or len(vid) < 5:
+                        continue
+                    result.append(
+                        MediaItem(
+                            id=vid,
+                            title=entry.get("title") or "Без названия",
+                            url=f"https://www.youtube.com/watch?v={vid}",
+                            platform="youtube",
+                            content_type="video",
+                            author=entry.get("uploaderName") or "",
+                            thumbnail=entry.get("thumbnail") or "",
+                            duration=int(entry.get("duration")) if entry.get("duration") else None,
+                            view_count=int(entry.get("views")) if entry.get("views") else None,
+                        )
+                    )
+                if result:
+                    log.info("Piped %s видео: %s", len(result), query)
+                    return result
+            except Exception as exc:
+                log.debug("Piped %s: %s", base, exc)
+                continue
+
+        # 2. Invidious
+        for base in invidious_instances:
+            try:
+                r = requests.get(f"{base}/api/v1/search", params={"q": query, "type": "video"}, timeout=6, proxies=self.vpn.requests_proxies())
+                if r.status_code != 200:
+                    continue
+                data = r.json()
+                result: List[MediaItem] = []
+                for entry in data[:limit]:
+                    vid = entry.get("videoId")
+                    if not vid:
+                        continue
+                    result.append(
+                        MediaItem(
+                            id=vid,
+                            title=entry.get("title") or "Без названия",
+                            url=f"https://www.youtube.com/watch?v={vid}",
+                            platform="youtube",
+                            content_type="video",
+                            author=entry.get("author") or "",
+                            thumbnail=f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg",
+                            duration=int(entry.get("lengthSeconds")) if entry.get("lengthSeconds") else None,
+                            view_count=int(entry.get("viewCount")) if entry.get("viewCount") else None,
+                        )
+                    )
+                if result:
+                    log.info("Invidious %s видео: %s", len(result), query)
+                    return result
+            except Exception as exc:
+                log.debug("Invidious %s: %s", base, exc)
+                continue
+
+        return []
 
     def recommendations(self, queries: List[str], limit: int = 24) -> List[MediaItem]:
         """Лента рекомендаций — теперь параллельно, чтобы грузилось быстрее."""
@@ -155,12 +251,16 @@ class YouTubeProvider(BaseProvider):
         return collected[:limit]
 
     def trending(self, limit: int = 24) -> List[MediaItem]:
-        """Тренды YouTube — стартовая лента для нового профиля."""
         info = self._extract(
             TRENDING_URL,
             self._base_opts(extract_flat=True, playlistend=limit, noplaylist=False),
         )
-        return self._entries_to_items(info)[:limit]
+        items = self._entries_to_items(info)[:limit]
+        if items:
+            return items
+        # Fallback — популярные запросы через Piped
+        log.info("Тренды YouTube не загрузились, используем Piped популярные")
+        return self._search_via_piped("топ видео", limit=limit)
 
     def get_item(self, video_id_or_url: str) -> Optional[MediaItem]:
         """Полные метаданные одного видео (включая прямую ссылку на поток)."""

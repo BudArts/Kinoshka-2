@@ -129,7 +129,24 @@ class BaseView:
         on_play = on_play or self.app.open_player
         on_download = on_download or self.app.download_item
         card_width = self._card_width()
-        # Оборачиваем в Container с прозрачным фоном, чтобы не было серых артефактов
+
+        if items and items[0].content_type == "music":
+            try:
+                from UI.components.MusicCard import MusicCard
+
+                return ft.Container(
+                    content=ft.Row(
+                        controls=[MusicCard(item, on_play=on_play, on_download=on_download, width=190) for item in items],
+                        wrap=True,
+                        spacing=12,
+                        run_spacing=12,
+                        vertical_alignment=ft.CrossAxisAlignment.START,
+                    ),
+                    bgcolor=ft.Colors.TRANSPARENT,
+                )
+            except Exception:
+                pass
+
         return ft.Container(
             content=ft.Row(
                 controls=[MediaCard(item, on_play=on_play, on_download=on_download, width=card_width) for item in items],
@@ -149,6 +166,25 @@ class BaseView:
         if not items:
             return ft.Container(bgcolor=ft.Colors.TRANSPARENT)
         on_play = on_play or self.app.open_player
+
+        # Для музыки — только обложки, без видео
+        if items and items[0].content_type == "music":
+            try:
+                from UI.components.MusicCard import MusicCard
+
+                return ft.Container(
+                    content=ft.Row(
+                        controls=[MusicCard(item, on_play=on_play, on_download=self.app.download_item, width=160) for item in items],
+                        spacing=12,
+                        scroll=ft.ScrollMode.AUTO,
+                        wrap=False,
+                        vertical_alignment=ft.CrossAxisAlignment.START,
+                    ),
+                    bgcolor=ft.Colors.TRANSPARENT,
+                )
+            except Exception:
+                pass
+
         return ft.Container(
             content=ft.Row(
                 controls=[MediaCard(item, on_play=on_play, on_download=self.app.download_item, width=220, compact=True) for item in items],

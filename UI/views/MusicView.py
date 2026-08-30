@@ -8,7 +8,7 @@ import flet as ft
 
 from core.media import MediaItem
 from UI.components.Common import EmptyState, SearchField, SectionTitle, StatusChip
-from UI.components.MediaCard import MediaCard
+from UI.components.MusicCard import MusicCard
 from UI.themes.DarkTheme import COLORS, FONT_BOLD
 from UI.views.VideoView import VideoView
 
@@ -75,10 +75,11 @@ class MusicView(VideoView):
         on_download = on_download or self._download_track
         return ft.Container(
             content=ft.Row(
-                controls=[MediaCard(item, on_play=on_play, on_download=on_download, width=190) for item in items],
+                controls=[MusicCard(item, on_play=on_play, on_download=on_download, width=190) for item in items],
                 wrap=True,
                 spacing=12,
                 run_spacing=12,
+                vertical_alignment=ft.CrossAxisAlignment.START,
             ),
             bgcolor=ft.Colors.TRANSPARENT,
         )
