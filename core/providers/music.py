@@ -80,24 +80,41 @@ class MusicProvider(YouTubeProvider):
         return items[:limit]
 
     def recommendations(self, queries: List[str], limit: int = 24) -> List[MediaItem]:
-        """Лента музыки по интересам пользователя."""
+        """Лента музыки по интересам — параллельно."""
         if not queries:
             return self.search("популярная музыка", limit=limit)
 
+        queries = queries[:4]
         per_query = max(2, limit // max(len(queries), 1))
         collected: List[MediaItem] = []
         seen: set[str] = set()
 
-        for query in queries:
-            for item in self.search(query, limit=per_query):
-                if item.id in seen:
+        import concurrent.futures
+
+        def search_one(q: str):
+            try:
+                return q, self.search(q, limit=per_query)
+            except Exception:
+                return q, []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(queries))) as ex:
+            futures = [ex.submit(search_one, q) for q in queries]
+            for fut in concurrent.futures.as_completed(futures):
+                try:
+                    q, items = fut.result()
+                except Exception:
                     continue
-                seen.add(item.id)
-                if query not in item.categories:
-                    item.categories.append(query)
-                collected.append(item)
-            if len(collected) >= limit:
-                break
+                for item in items:
+                    if item.id in seen:
+                        continue
+                    seen.add(item.id)
+                    if q not in item.categories:
+                        item.categories.append(q)
+                    collected.append(item)
+                    if len(collected) >= limit:
+                        break
+                if len(collected) >= limit:
+                    break
 
         if not collected:
             return self.search("популярная музыка", limit=limit)
