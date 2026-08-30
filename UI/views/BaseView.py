@@ -35,7 +35,6 @@ class BaseView:
         self.app = app
         self.page: ft.Page = app.page
 
-        #: Контейнер, в который экран кладёт своё содержимое.
         self.body = ft.Column(
             controls=[],
             spacing=18,
@@ -46,6 +45,7 @@ class BaseView:
             content=self.body,
             padding=ft.Padding(24, 16, 24, 24),
             expand=True,
+            bgcolor=COLORS["bg"],
         )
 
     # ------------------------------------------------------------------ #
@@ -124,21 +124,21 @@ class BaseView:
         on_play: Optional[Callable[[MediaItem], None]] = None,
         on_download: Optional[Callable[[MediaItem], None]] = None,
     ) -> ft.Control:
-        """Адаптивная сетка карточек: количество колонок зависит от ширины."""
+        if not items:
+            return ft.Container(bgcolor=ft.Colors.TRANSPARENT)
         on_play = on_play or self.app.open_player
         on_download = on_download or self.app.download_item
-
         card_width = self._card_width()
-        return ft.Row(
-            controls=[
-                MediaCard(item, on_play=on_play, on_download=on_download, width=card_width)
-                for item in items
-            ],
-            wrap=True,
-            spacing=12,
-            run_spacing=12,
-            # По верху — иначе карточки разной высоты дают рваные ряды.
-            vertical_alignment=ft.CrossAxisAlignment.START,
+        # Оборачиваем в Container с прозрачным фоном, чтобы не было серых артефактов
+        return ft.Container(
+            content=ft.Row(
+                controls=[MediaCard(item, on_play=on_play, on_download=on_download, width=card_width) for item in items],
+                wrap=True,
+                spacing=12,
+                run_spacing=12,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+            ),
+            bgcolor=ft.Colors.TRANSPARENT,
         )
 
     def media_row(
@@ -146,23 +146,18 @@ class BaseView:
         items: List[MediaItem],
         on_play: Optional[Callable[[MediaItem], None]] = None,
     ) -> ft.Control:
-        """Горизонтальная карусель (для блоков «Продолжить смотреть» и т.п.)."""
+        if not items:
+            return ft.Container(bgcolor=ft.Colors.TRANSPARENT)
         on_play = on_play or self.app.open_player
-        return ft.Row(
-            controls=[
-                MediaCard(
-                    item,
-                    on_play=on_play,
-                    on_download=self.app.download_item,
-                    width=220,
-                    compact=True,
-                )
-                for item in items
-            ],
-            spacing=12,
-            scroll=ft.ScrollMode.AUTO,
-            wrap=False,
-            vertical_alignment=ft.CrossAxisAlignment.START,
+        return ft.Container(
+            content=ft.Row(
+                controls=[MediaCard(item, on_play=on_play, on_download=self.app.download_item, width=220, compact=True) for item in items],
+                spacing=12,
+                scroll=ft.ScrollMode.AUTO,
+                wrap=False,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+            ),
+            bgcolor=ft.Colors.TRANSPARENT,
         )
 
     def _card_width(self) -> int:
@@ -177,12 +172,11 @@ class BaseView:
         return 270
 
     def offline_notice(self, source: str = "YouTube") -> ft.Control:
-        """Подсказка, что источник недоступен без VPN."""
         return EmptyState(
             f"{source} недоступен",
-            "Похоже, нет соединения с источником. В России YouTube требует VPN — "
-            "включите туннель в настройках или проверьте интернет.",
+            "Похоже, нет соединения с источником. Проверьте интернет — VPN работает в фоне автоматически, "
+            "если одна конфигурация отвалится, приложение переключится на другую.",
             icon=ft.Icons.WIFI_OFF_ROUNDED,
-            action_text="Открыть настройки VPN",
-            on_action=lambda: self.app.navigate("settings"),
+            action_text="Обновить",
+            on_action=lambda: self.app.navigate("home"),
         )

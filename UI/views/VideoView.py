@@ -1,4 +1,4 @@
-"""Раздел «Видео» — YouTube: рекомендации, поиск, фильтры."""
+"""Раздел «Видео» — YouTube: рекомендации, поиск."""
 
 from __future__ import annotations
 
@@ -12,8 +12,6 @@ from UI.views.BaseView import BaseView
 
 
 class VideoView(BaseView):
-    """Лента YouTube и поиск по нему."""
-
     title = "Видео"
     content_type = "video"
     source_name = "YouTube"
@@ -21,12 +19,11 @@ class VideoView(BaseView):
     def __init__(self, session, app):
         super().__init__(session, app)
         self._query: Optional[str] = None
-        self._results_container = ft.Column(spacing=14, expand=True)
+        self._results_inner = ft.Column(spacing=14, tight=True)
+        self._results_container = ft.Container(content=self._results_inner, bgcolor=ft.Colors.TRANSPARENT)
         self._search_field: Optional[SearchField] = None
 
-    # ------------------------------------------------------------------ #
     def on_show(self, query: Optional[str] = None) -> None:
-        """Показать ленту или сразу результаты поиска (если пришёл запрос)."""
         self._build_shell()
         if query:
             self.search(query)
@@ -34,7 +31,6 @@ class VideoView(BaseView):
             self.load_feed()
 
     def _build_shell(self) -> None:
-        """Каркас экрана: заголовок + поиск + область результатов."""
         self._search_field = SearchField(
             on_search=self.search,
             placeholder=f"Поиск на {self.source_name} — название или ссылка",
@@ -44,11 +40,9 @@ class VideoView(BaseView):
             [
                 ft.Row(
                     controls=[
-                        ft.Text(self.title, size=26, color=ft.Colors.WHITE,
-                                font_family=FONT_BOLD),
+                        ft.Text(self.title, size=26, color=ft.Colors.WHITE, font_family=FONT_BOLD),
                         ft.Container(
-                            content=ft.Text(self.source_name, size=12,
-                                            color=COLORS["muted"]),
+                            content=ft.Text(self.source_name, size=12, color=COLORS["muted"]),
                             padding=ft.Padding(10, 4, 10, 4),
                             border_radius=10,
                             bgcolor=COLORS["surface"],
@@ -66,15 +60,10 @@ class VideoView(BaseView):
         if not self.session.user_id:
             return []
         try:
-            return self.session.recommendations.recent_searches(
-                self.session.user_id, limit=6
-            )
+            return self.session.recommendations.recent_searches(self.session.user_id, limit=6)
         except Exception:
             return []
 
-    # ------------------------------------------------------------------ #
-    #  Лента рекомендаций
-    # ------------------------------------------------------------------ #
     def load_feed(self) -> None:
         self._query = None
         self._set_results(self._loading_block("Подбираем рекомендации…"))
@@ -84,9 +73,6 @@ class VideoView(BaseView):
             loading_text=None,
         )
 
-    # ------------------------------------------------------------------ #
-    #  Поиск
-    # ------------------------------------------------------------------ #
     def search(self, query: str) -> None:
         query = (query or "").strip()
         if not query:
@@ -106,9 +92,7 @@ class VideoView(BaseView):
             loading_text=None,
         )
 
-    # ------------------------------------------------------------------ #
     def _render(self, items, heading: str) -> None:
-        """Отрисовать выдачу либо объяснить, почему её нет."""
         if isinstance(items, Exception):
             self._set_results(
                 EmptyState(
@@ -126,11 +110,10 @@ class VideoView(BaseView):
                 self._set_results(
                     EmptyState(
                         f"По запросу «{self._query}» ничего не найдено",
-                        f"Проверьте написание или попробуйте другой запрос. "
-                        f"Если {self.source_name} недоступен — включите VPN в настройках.",
+                        "Проверьте написание или попробуйте другой запрос. Если источник недоступен — проверьте интернет, VPN работает автоматически.",
                         icon=ft.Icons.SEARCH_OFF_ROUNDED,
-                        action_text="Настройки VPN",
-                        on_action=lambda: self.app.navigate("settings"),
+                        action_text="К рекомендациям",
+                        on_action=self.load_feed,
                     )
                 )
             else:
@@ -138,11 +121,7 @@ class VideoView(BaseView):
             return
 
         self._set_results(
-            SectionTitle(
-                heading,
-                action_text="Обновить" if not self._query else "К рекомендациям",
-                on_action=self._retry if not self._query else self.load_feed,
-            ),
+            SectionTitle(heading, action_text="Обновить" if not self._query else "К рекомендациям", on_action=self._retry if not self._query else self.load_feed),
             self.media_grid(items),
         )
 
@@ -153,20 +132,18 @@ class VideoView(BaseView):
             self.load_feed()
 
     def _set_results(self, *controls: ft.Control) -> None:
-        self._results_container.controls = list(controls)
+        self._results_inner.controls = list(controls)
         self.safe_update()
 
     @staticmethod
     def _loading_block(text: str) -> ft.Control:
         return ft.Container(
             content=ft.Row(
-                controls=[
-                    ft.ProgressRing(color=COLORS["gradient1"], width=26, height=26),
-                    ft.Text(text, size=14, color=COLORS["muted"]),
-                ],
+                controls=[ft.ProgressRing(color=COLORS["gradient1"], width=26, height=26), ft.Text(text, size=14, color=COLORS["muted"])],
                 spacing=14,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
             padding=40,
             alignment=ft.Alignment.CENTER,
+            bgcolor=ft.Colors.TRANSPARENT,
         )

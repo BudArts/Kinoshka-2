@@ -7,27 +7,23 @@ from typing import List
 import flet as ft
 
 from core.media import MediaItem
-from UI.components.Common import EmptyState, GradientButton, SearchField, SectionTitle
+from UI.components.Common import EmptyState, SearchField, SectionTitle
 from UI.themes.DarkTheme import COLORS, FONT_BOLD, brand_gradient
 from UI.views.BaseView import BaseView
 
 
 class HomeView(BaseView):
-    """Приветствие, поиск, «продолжить смотреть» и рекомендации."""
-
     title = "Главная"
     content_type = "video"
 
     def on_show(self) -> None:
         self._load()
 
-    # ------------------------------------------------------------------ #
     def _load(self) -> None:
         user_id = self.session.user_id
         if not user_id:
             return
 
-        # Блоки, не требующие сети, рисуем сразу — экран не выглядит пустым.
         self.set_controls(self._static_blocks() + [self._feed_placeholder()])
 
         self.run_async(
@@ -45,16 +41,11 @@ class HomeView(BaseView):
             SearchField(
                 on_search=lambda q: self.app.navigate("video", query=q),
                 placeholder="Что посмотреть? Название или ссылка",
-                suggestions=self.session.recommendations.recent_searches(
-                    self.session.user_id, limit=5
-                )
-                if self.session.user_id
-                else None,
+                suggestions=self.session.recommendations.recent_searches(self.session.user_id, limit=5) if self.session.user_id else None,
             ),
             self._quick_tiles(),
         ]
 
-        # «Продолжить смотреть» — из локальной истории, сеть не нужна.
         continue_items = self._continue_watching()
         if continue_items:
             blocks.append(SectionTitle("Продолжить просмотр", icon=ft.Icons.HISTORY_ROUNDED))
@@ -63,17 +54,11 @@ class HomeView(BaseView):
         return blocks
 
     def _hero(self, name: str) -> ft.Control:
-        """Верхний баннер с приветствием."""
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text(f"Привет, {name}!", size=28, color=ft.Colors.WHITE,
-                            font_family=FONT_BOLD),
-                    ft.Text(
-                        "Видео с YouTube, фильмы и сериалы с RuTube, музыка — "
-                        "смотрите онлайн или скачивайте себе.",
-                        size=14, color=ft.Colors.with_opacity(0.85, ft.Colors.WHITE),
-                    ),
+                    ft.Text(f"Привет, {name}!", size=28, color=ft.Colors.WHITE, font_family=FONT_BOLD),
+                    ft.Text("Видео с YouTube, фильмы и сериалы с RuTube, музыка — смотрите онлайн или скачивайте.", size=14, color=ft.Colors.with_opacity(0.85, ft.Colors.WHITE)),
                 ],
                 spacing=8,
                 tight=True,
@@ -84,31 +69,33 @@ class HomeView(BaseView):
         )
 
     def _quick_tiles(self) -> ft.Control:
-        """Быстрые переходы в разделы."""
         tiles = [
             (ft.Icons.ONDEMAND_VIDEO_ROUNDED, "Видео", "YouTube", "video"),
             (ft.Icons.CAMERA_ROLL_ROUNDED, "Фильмы", "RuTube и другие", "films"),
-            (ft.Icons.MUSIC_NOTE_ROUNDED, "Музыка", "Треки и альбомы", "music"),
+            (ft.Icons.MUSIC_NOTE_ROUNDED, "Музыка", "Яндекс Музыка", "music"),
             (ft.Icons.DOWNLOAD_DONE_ROUNDED, "Загрузки", "Смотреть офлайн", "my_video"),
         ]
 
         def tile(icon, title, subtitle, route) -> ft.Control:
-            container = ft.Container(
+            # Используем Container без ink, чтобы избежать серых артефактов
+            return ft.Container(
                 content=ft.Row(
                     controls=[
                         ft.Container(
-                            width=44, height=44, border_radius=12,
+                            width=44,
+                            height=44,
+                            border_radius=12,
                             bgcolor=ft.Colors.with_opacity(0.15, COLORS["gradient1"]),
                             alignment=ft.Alignment.CENTER,
                             content=ft.Icon(icon, color=COLORS["gradient1"], size=22),
                         ),
                         ft.Column(
                             controls=[
-                                ft.Text(title, size=15, color=ft.Colors.WHITE,
-                                        font_family=FONT_BOLD),
+                                ft.Text(title, size=15, color=ft.Colors.WHITE, font_family=FONT_BOLD),
                                 ft.Text(subtitle, size=12, color=COLORS["muted"]),
                             ],
-                            spacing=1, tight=True,
+                            spacing=1,
+                            tight=True,
                         ),
                     ],
                     spacing=12,
@@ -119,28 +106,20 @@ class HomeView(BaseView):
                 bgcolor=COLORS["surface"],
                 width=230,
                 on_click=lambda e, r=route: self.app.navigate(r),
-                ink=True,
             )
-            return container
 
-        return ft.Row(
-            controls=[tile(*t) for t in tiles],
-            spacing=12,
-            run_spacing=12,
-            wrap=True,
+        return ft.Container(
+            content=ft.Row(controls=[tile(*t) for t in tiles], spacing=12, run_spacing=12, wrap=True),
+            bgcolor=ft.Colors.TRANSPARENT,
         )
 
     def _continue_watching(self) -> List[MediaItem]:
-        """Незавершённые просмотры превращаем обратно в MediaItem."""
         if not self.session.user_id:
             return []
         try:
-            entries = self.session.recommendations.get_continue_watching(
-                self.session.user_id, limit=8
-            )
+            entries = self.session.recommendations.get_continue_watching(self.session.user_id, limit=8)
         except Exception:
             return []
-
         return [
             MediaItem(
                 id=entry.video_id or entry.link,
@@ -162,37 +141,34 @@ class HomeView(BaseView):
         self._feed_container = ft.Column(
             controls=[
                 SectionTitle("Рекомендации для вас", icon=ft.Icons.AUTO_AWESOME_ROUNDED),
-                ft.Row(
-                    controls=[ft.ProgressRing(color=COLORS["gradient1"], width=24, height=24),
-                              ft.Text("Подбираем видео…", size=13, color=COLORS["muted"])],
-                    spacing=12,
+                ft.Container(
+                    content=ft.Row(
+                        controls=[ft.ProgressRing(color=COLORS["gradient1"], width=24, height=24), ft.Text("Подбираем видео…", size=13, color=COLORS["muted"])],
+                        spacing=12,
+                    ),
+                    bgcolor=ft.Colors.TRANSPARENT,
+                    padding=10,
                 ),
             ],
             spacing=14,
+            tight=True,
         )
-        return self._feed_container
+        return ft.Container(content=self._feed_container, bgcolor=ft.Colors.TRANSPARENT)
 
     def _render_feed(self, items) -> None:
-        """Дорисовать ленту, когда сеть ответила."""
         if isinstance(items, Exception) or not items:
             body: ft.Control = EmptyState(
                 "Лента пока пуста",
-                "Не удалось получить видео с YouTube. Если вы в России — "
-                "включите VPN в настройках, затем обновите страницу.",
+                "Не удалось получить видео. Проверьте интернет — VPN работает автоматически в фоне.",
                 icon=ft.Icons.CLOUD_OFF_ROUNDED,
-                action_text="Настройки VPN",
-                on_action=lambda: self.app.navigate("settings"),
+                action_text="Обновить",
+                on_action=self._load,
             )
         else:
             body = self.media_grid(items)
 
         self._feed_container.controls = [
-            SectionTitle(
-                "Рекомендации для вас",
-                action_text="Обновить",
-                on_action=self._load,
-                icon=ft.Icons.AUTO_AWESOME_ROUNDED,
-            ),
+            SectionTitle("Рекомендации для вас", action_text="Обновить", on_action=self._load, icon=ft.Icons.AUTO_AWESOME_ROUNDED),
             body,
         ]
         self.safe_update()

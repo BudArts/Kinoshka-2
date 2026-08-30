@@ -6,6 +6,7 @@ flet-video==0.86.5
 yt-dlp>=2026.8.19
 requests>=2.32
 beautifulsoup4>=4.12
+yandex-music>=3.0.0
 
 # База данных
 SQLAlchemy>=2.0

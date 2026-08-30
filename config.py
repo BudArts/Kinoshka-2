@@ -83,10 +83,7 @@ def ensure_dirs() -> None:
 # --------------------------------------------------------------------------- #
 #  Настройки
 # --------------------------------------------------------------------------- #
-# Встроенный ключ GigaChat — по просьбе пользователя вшит в программу,
-# чтобы не приходилось вводить его вручную. Если ключ протухнет,
-# его можно переопределить в настройках (поле остаётся доступным через
-# файл settings.json, но в UI не показывается).
+# Встроенный ключ GigaChat оставлен для совместимости, но ИИ в UI убран по просьбе пользователя.
 BUNDLED_GIGACHAT_CREDENTIALS = (
     "YzNhMGVlNzYtYmNiNC00MTUyLWJkMjAtZGRlMjhkMzJkNzY5OjAyMWUwNjBhLTdkZTktNDY3Ni04NDEyLWZjZTlkYjM1NDI4OA=="
 )
@@ -98,40 +95,37 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "last_user_id": None,
     "start_page": "Главная",
     # --- воспроизведение ---
-    "preferred_quality": "720p",       # 360p / 480p / 720p / 1080p / best
+    "preferred_quality": "720p",
     "autoplay": True,
-    "default_volume": 80,              # 0..100
+    "default_volume": 80,
     "save_history": True,
     # --- загрузки ---
     "download_dir": str(DOWNLOADS_DIR),
     "max_parallel_downloads": 2,
     "download_quality": "1080p",
-    "audio_format": "mp3",             # mp3 / m4a / opus
+    "audio_format": "mp3",
     "embed_thumbnail": True,
     # --- сеть / VPN ---
-    "vpn_enabled": False,
-    "vpn_bundled_installed": False,  # развёрнуты ли вшитые пресеты
-    "vpn_active_config": None,         # имя конфигурации в VPN_DIR
-    "vpn_auto_connect": True,          # поднимать туннель перед запросами к YouTube
-    "vpn_only_for": ["youtube"],       # для каких источников нужен VPN
-    "proxy_url": "",                   # запасной вариант: http:// или socks5://
-    "request_timeout": 20,
-    # --- ИИ-поиск ---
-    "ai_enabled": True,                # включён по умолчанию — ключ вшит
-    "ai_provider": "gigachat",          # gigachat / openai
-    # GigaChat (Сбер): ключ Basic из личного кабинета — вшит по умолчанию
+    # VPN всегда включён и работает в фоне без кнопок, как просил пользователь.
+    "vpn_enabled": True,
+    "vpn_bundled_installed": False,
+    "vpn_active_config": None,
+    "vpn_auto_connect": True,
+    "vpn_only_for": ["youtube", "youtube_music"],
+    "proxy_url": "",
+    "request_timeout": 12,
+    # --- ИИ-поиск (убран из интерфейса, оставлен только эвристика) ---
+    "ai_enabled": False,
+    "ai_provider": "gigachat",
     "gigachat_credentials": BUNDLED_GIGACHAT_CREDENTIALS,
     "gigachat_scope": "GIGACHAT_API_PERS",
     "gigachat_model": "GigaChat",
-    # Сертификаты GigaChat подписаны Минцифры и обычно отсутствуют
-    # в системном хранилище, поэтому по умолчанию проверку TLS не делаем.
     "gigachat_verify_ssl": False,
-    # OpenAI-совместимый сервис (запасной)
     "ai_base_url": "https://api.openai.com/v1",
     "ai_api_key": "",
     "ai_model": "gpt-4o-mini",
     # --- метаданные фильмов ---
-    "kinopoisk_api_key": "",           # бесплатный ключ с kinopoisk.dev
+    "kinopoisk_api_key": "",
     # --- рекомендации ---
     "recommendations_count": 24,
     "interest_decay_days": 30,

@@ -37,7 +37,7 @@ def gradient_text(
 
 
 class AppBar(ft.AppBar):
-    """Панель приложения с индикатором VPN и кнопкой профиля."""
+    """Панель приложения — без упоминаний VPN, как просил пользователь."""
 
     def __init__(
         self,
@@ -49,22 +49,13 @@ class AppBar(ft.AppBar):
     ):
         self._on_profile_click = on_profile_click
 
-        # --- заголовок --------------------------------------------------
         title: ft.Control = gradient_text("K i n o s h k a", size=28)
 
-        # --- индикатор VPN ----------------------------------------------
-        self.vpn_icon = ft.Icon(ft.Icons.SHIELD_OUTLINED, size=18, color=COLORS["muted"])
-        self.vpn_text = ft.Text("VPN выкл.", size=12, color=COLORS["muted"])
-        self.vpn_indicator = ft.Container(
-            content=ft.Row([self.vpn_icon, self.vpn_text], spacing=6, tight=True),
-            padding=ft.Padding(10, 6, 10, 6),
-            border_radius=12,
-            bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.WHITE),
-            tooltip="Состояние VPN-туннеля",
-            on_click=lambda e: on_settings() if on_settings else None,
-        )
+        # Индикатор VPN убран из интерфейса, но оставили заглушки методов для совместимости
+        self.vpn_icon = ft.Icon(ft.Icons.SHIELD_OUTLINED, size=18, color=COLORS["muted"], visible=False)
+        self.vpn_text = ft.Text("", size=12, color=COLORS["muted"], visible=False)
+        self.vpn_indicator = ft.Container(visible=False)
 
-        # --- меню профиля ------------------------------------------------
         self.profile_button = ft.PopupMenuButton(
             content=ft.Container(
                 content=ft.Row(
@@ -116,7 +107,7 @@ class AppBar(ft.AppBar):
             leading = ft.IconButton(
                 icon=ft.Icons.MENU_ROUNDED,
                 icon_color=ft.Colors.WHITE,
-                tooltip="Свернуть меню",
+                tooltip="Меню",
                 on_click=lambda e: on_menu_toggle(),
             )
 
@@ -128,35 +119,16 @@ class AppBar(ft.AppBar):
             toolbar_height=58,
             bgcolor=COLORS["dark_gray"],
             actions=[
-                self.vpn_indicator,
-                ft.Container(width=10),
                 self.profile_button,
                 ft.Container(width=10),
             ],
         )
 
-    # ------------------------------------------------------------------ #
     def set_vpn_status(self, status: str, name: Optional[str] = None) -> None:
-        """Обновить индикатор: connected / disconnected / error / off."""
-        presets = {
-            "connected": (ft.Icons.SHIELD_ROUNDED, COLORS["success"], f"VPN: {name or 'вкл.'}"),
-            "disconnected": (ft.Icons.SHIELD_OUTLINED, COLORS["muted"], "VPN выкл."),
-            "off": (ft.Icons.SHIELD_OUTLINED, COLORS["muted"], "VPN выкл."),
-            "connecting": (ft.Icons.SHIELD_MOON_ROUNDED, COLORS["warning"], "Подключение…"),
-            "error": (ft.Icons.GPP_BAD_ROUNDED, COLORS["error"], "Ошибка VPN"),
-        }
-        icon, color, text = presets.get(status, presets["disconnected"])
-        self.vpn_icon.name = icon
-        self.vpn_icon.color = color
-        self.vpn_text.value = text
-        self.vpn_text.color = color
-        try:
-            self.vpn_indicator.update()
-        except Exception:
-            pass
+        # Заглушка — VPN теперь невидим в UI, но метод оставлен чтобы не падали вызовы
+        pass
 
     def set_user(self, user_name: str) -> None:
-        """Перерисовать кнопку профиля после смены аккаунта."""
         row = self.profile_button.content.content
         avatar, label = row.controls[0], row.controls[1]
         avatar.content.value = (user_name or "?")[:1].upper()

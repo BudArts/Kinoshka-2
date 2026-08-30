@@ -99,22 +99,15 @@ class HistoryView(BaseView):
             active = value == self._filter
             chips.append(
                 ft.Container(
-                    content=ft.Text(
-                        label, size=13,
-                        color=ft.Colors.WHITE if active else COLORS["muted"],
-                    ),
+                    content=ft.Text(label, size=13, color=ft.Colors.WHITE if active else COLORS["muted"]),
                     padding=ft.Padding(16, 8, 16, 8),
                     border_radius=18,
-                    bgcolor=ft.Colors.with_opacity(0.18, COLORS["gradient1"])
-                    if active else COLORS["surface"],
-                    border=ft.Border.all(
-                        1, COLORS["gradient1"] if active else ft.Colors.TRANSPARENT
-                    ),
+                    bgcolor=ft.Colors.with_opacity(0.18, COLORS["gradient1"]) if active else COLORS["surface"],
+                    border=ft.Border.all(1, COLORS["gradient1"] if active else ft.Colors.TRANSPARENT),
                     on_click=lambda e, v=value: self._set_filter(v),
-                    ink=True,
                 )
             )
-        return ft.Row(controls=chips, spacing=8, wrap=True)
+        return ft.Container(content=ft.Row(controls=chips, spacing=8, wrap=True), bgcolor=ft.Colors.TRANSPARENT)
 
     def _set_filter(self, value: Optional[str]) -> None:
         self._filter = value
@@ -180,25 +173,15 @@ class HistoryView(BaseView):
                     thumb,
                     ft.Column(
                         controls=[
-                            ft.Text(entry.title, size=14, color=ft.Colors.WHITE,
-                                    max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
-                            ft.Text(meta, size=12, color=COLORS["muted"], max_lines=1,
-                                    overflow=ft.TextOverflow.ELLIPSIS),
+                            ft.Text(entry.title, size=14, color=ft.Colors.WHITE, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS),
+                            ft.Text(meta, size=12, color=COLORS["muted"], max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
                         ],
-                        spacing=3, expand=True, tight=True,
+                        spacing=3,
+                        expand=True,
+                        tight=True,
                     ),
-                    ft.IconButton(
-                        icon=ft.Icons.PLAY_ARROW_ROUNDED, icon_color=ft.Colors.WHITE,
-                        tooltip="Смотреть снова",
-                        on_click=lambda e, en=entry: self._replay(en),
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.DOWNLOAD_ROUNDED, icon_color=COLORS["muted"],
-                        tooltip="Скачать",
-                        on_click=lambda e, en=entry: self.app.download_item(
-                            self._to_item(en)
-                        ),
-                    ),
+                    ft.IconButton(icon=ft.Icons.PLAY_ARROW_ROUNDED, icon_color=ft.Colors.WHITE, tooltip="Смотреть снова", on_click=lambda e, en=entry: self._replay(en)),
+                    ft.IconButton(icon=ft.Icons.DOWNLOAD_ROUNDED, icon_color=COLORS["muted"], tooltip="Скачать", on_click=lambda e, en=entry: self.app.download_item(self._to_item(en))),
                 ],
                 spacing=12,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -207,7 +190,6 @@ class HistoryView(BaseView):
             border_radius=12,
             bgcolor=COLORS["surface"],
             on_click=lambda e, en=entry: self._replay(en),
-            ink=True,
         )
 
     @staticmethod

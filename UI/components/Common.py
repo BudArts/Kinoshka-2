@@ -1,4 +1,4 @@
-"""Мелкие переиспользуемые элементы интерфейса."""
+"""Мелкие переиспользуемые элементы интерфейса — только стандартные контролы Flet."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Callable, List, Optional
 
 import flet as ft
 
-from UI.themes.DarkTheme import ANIM, COLORS, FONT_BOLD, brand_gradient
+from UI.themes.DarkTheme import COLORS, FONT_BOLD
 
 
 class SearchField(ft.Container):
@@ -36,21 +36,23 @@ class SearchField(ft.Container):
             on_submit=self._submit,
         )
 
-        controls: List[ft.Control] = [self.field]
-        controls.append(
-            ft.Container(
-                content=ft.Text("Найти", color=ft.Colors.WHITE, font_family=FONT_BOLD),
-                gradient=brand_gradient(),
+        find_btn = ft.ElevatedButton(
+            content=ft.Text("Найти", color=ft.Colors.WHITE, font_family=FONT_BOLD),
+            icon=ft.Icons.SEARCH_ROUNDED,
+            style=ft.ButtonStyle(
+                bgcolor=COLORS["gradient1"],
+                color=ft.Colors.WHITE,
+                shape=ft.RoundedRectangleBorder(radius=24),
                 padding=ft.Padding(22, 14, 22, 14),
-                border_radius=24,
-                on_click=self._submit,
-                ink=True,
-            )
+            ),
+            on_click=self._submit,
         )
+
+        controls: List[ft.Control] = [self.field, find_btn]
         if trailing:
             controls.extend(trailing)
 
-        body: List[ft.Control] = [ft.Row(controls=controls, spacing=10)]
+        body: List[ft.Control] = [ft.Row(controls=controls, spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER)]
 
         if suggestions:
             body.append(
@@ -62,7 +64,6 @@ class SearchField(ft.Container):
                             border_radius=16,
                             bgcolor=COLORS["surface"],
                             on_click=lambda e, t=text: self.run(t),
-                            ink=True,
                         )
                         for text in suggestions[:6]
                     ],
@@ -71,13 +72,15 @@ class SearchField(ft.Container):
                 )
             )
 
-        super().__init__(content=ft.Column(controls=body, spacing=10, tight=True))
+        super().__init__(
+            content=ft.Column(controls=body, spacing=10, tight=True),
+            bgcolor=ft.Colors.TRANSPARENT,
+        )
 
     def _submit(self, e=None) -> None:
         self.run(self.field.value or "")
 
     def run(self, query: str) -> None:
-        """Программно выполнить поиск (используется подсказками)."""
         query = (query or "").strip()
         if not query:
             return
@@ -85,7 +88,7 @@ class SearchField(ft.Container):
         try:
             self.field.update()
         except Exception:
-            pass  # поле ещё не на странице
+            pass
         self._on_search(query)
 
 
@@ -102,10 +105,8 @@ class SectionTitle(ft.Row):
         controls: List[ft.Control] = []
         if icon:
             controls.append(ft.Icon(icon, color=COLORS["gradient1"], size=22))
-        controls.append(
-            ft.Text(text, size=20, color=ft.Colors.WHITE, font_family=FONT_BOLD)
-        )
-        row: List[ft.Control] = [ft.Row(controls=controls, spacing=8)]
+        controls.append(ft.Text(text, size=20, color=ft.Colors.WHITE, font_family=FONT_BOLD))
+        row: List[ft.Control] = [ft.Row(controls=controls, spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)]
 
         if action_text and on_action:
             row.append(
@@ -124,7 +125,7 @@ class SectionTitle(ft.Row):
 
 
 class EmptyState(ft.Container):
-    """Заглушка для пустых экранов и ошибок — с понятным объяснением."""
+    """Заглушка для пустых экранов и ошибок."""
 
     def __init__(
         self,
@@ -136,41 +137,27 @@ class EmptyState(ft.Container):
     ):
         controls: List[ft.Control] = [
             ft.Icon(icon, size=64, color=COLORS["dark_gray"]),
-            ft.Text(title, size=18, color=ft.Colors.WHITE, font_family=FONT_BOLD,
-                    text_align=ft.TextAlign.CENTER),
+            ft.Text(title, size=18, color=ft.Colors.WHITE, font_family=FONT_BOLD, text_align=ft.TextAlign.CENTER),
         ]
         if description:
             controls.append(
-                ft.Text(
-                    description,
-                    size=13,
-                    color=COLORS["muted"],
-                    text_align=ft.TextAlign.CENTER,
-                    width=420,
-                )
+                ft.Text(description, size=13, color=COLORS["muted"], text_align=ft.TextAlign.CENTER, width=420)
             )
         if action_text and on_action:
             controls.append(
-                ft.Container(
+                ft.ElevatedButton(
                     content=ft.Text(action_text, color=ft.Colors.WHITE),
-                    gradient=brand_gradient(),
-                    padding=ft.Padding(20, 12, 20, 12),
-                    border_radius=20,
+                    style=ft.ButtonStyle(bgcolor=COLORS["gradient1"], color=ft.Colors.WHITE, shape=ft.RoundedRectangleBorder(radius=20)),
                     on_click=lambda e: on_action(),
-                    ink=True,
                 )
             )
 
         super().__init__(
-            content=ft.Column(
-                controls=controls,
-                spacing=14,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
+            content=ft.Column(controls=controls, spacing=14, horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER),
             alignment=ft.Alignment.CENTER,
             padding=40,
             expand=True,
+            bgcolor=ft.Colors.TRANSPARENT,
         )
 
 
@@ -191,12 +178,11 @@ class LoadingState(ft.Container):
             alignment=ft.Alignment.CENTER,
             padding=60,
             expand=True,
+            bgcolor=ft.Colors.TRANSPARENT,
         )
 
 
-class GradientButton(ft.Container):
-    """Основная кнопка приложения."""
-
+class GradientButton(ft.ElevatedButton):
     def __init__(
         self,
         text: str,
@@ -205,34 +191,22 @@ class GradientButton(ft.Container):
         width: Optional[int] = None,
         expand: bool = False,
     ):
-        content: List[ft.Control] = []
-        if icon:
-            content.append(ft.Icon(icon, color=ft.Colors.WHITE, size=18))
-        content.append(
-            ft.Text(text, color=ft.Colors.WHITE, font_family=FONT_BOLD, size=14)
-        )
-
         super().__init__(
-            content=ft.Row(
-                controls=content,
-                spacing=8,
-                alignment=ft.MainAxisAlignment.CENTER,
-                tight=True,
+            content=ft.Text(text, color=ft.Colors.WHITE, font_family=FONT_BOLD, size=14),
+            icon=icon,
+            style=ft.ButtonStyle(
+                bgcolor=COLORS["gradient1"],
+                color=ft.Colors.WHITE,
+                shape=ft.RoundedRectangleBorder(radius=14),
+                padding=ft.Padding(22, 14, 22, 14),
             ),
-            gradient=brand_gradient(),
-            padding=ft.Padding(22, 14, 22, 14),
-            border_radius=14,
             on_click=on_click,
-            ink=True,
             width=width,
             expand=expand,
-            animate_scale=ANIM,
         )
 
 
-class OutlineButton(ft.Container):
-    """Второстепенная кнопка."""
-
+class OutlineButton(ft.OutlinedButton):
     def __init__(
         self,
         text: str,
@@ -240,25 +214,22 @@ class OutlineButton(ft.Container):
         icon: Optional[str] = None,
         color: Optional[str] = None,
     ):
-        color = color or COLORS["muted"]
-        content: List[ft.Control] = []
-        if icon:
-            content.append(ft.Icon(icon, color=color, size=18))
-        content.append(ft.Text(text, color=color, size=14))
-
+        c = color or COLORS["muted"]
         super().__init__(
-            content=ft.Row(controls=content, spacing=8, tight=True,
-                           alignment=ft.MainAxisAlignment.CENTER),
-            padding=ft.Padding(20, 12, 20, 12),
-            border_radius=14,
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.25, ft.Colors.WHITE)),
+            content=ft.Text(text, color=c, size=14),
+            icon=icon,
+            style=ft.ButtonStyle(
+                color=c,
+                shape=ft.RoundedRectangleBorder(radius=14),
+                side=ft.BorderSide(1, ft.Colors.with_opacity(0.25, ft.Colors.WHITE)),
+                padding=ft.Padding(20, 12, 20, 12),
+            ),
             on_click=on_click,
-            ink=True,
         )
 
 
 class StatusChip(ft.Container):
-    """Небольшой индикатор состояния (VPN, статус загрузки)."""
+    """Небольшой индикатор состояния."""
 
     def __init__(self, text: str, color: str, icon: Optional[str] = None):
         controls: List[ft.Control] = []

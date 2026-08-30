@@ -39,12 +39,12 @@ class AppSession:
         init_db()
         self.settings = settings
         self.vpn = vpn_manager
-        # Вшитые конфигурации разворачиваем при первом запуске, чтобы YouTube
-        # работал сразу после установки, без ручного импорта.
+        # Вшитые конфигурации разворачиваем при первом запуске и сразу подключаем VPN в фоне
         try:
             self.vpn.ensure_bundled_installed()
+            self.vpn.auto_connect()
         except Exception:
-            log.debug("Не удалось развернуть вшитые VPN-конфигурации", exc_info=True)
+            log.debug("Не удалось развернуть/подключить VPN", exc_info=True)
         self.downloads = download_manager
         self.profiles = ProfileService()
 
