@@ -81,7 +81,12 @@ class GigaChatLLM(BaseLLM):
     # ------------------------------------------------------------------ #
     @property
     def credentials(self) -> str:
-        return (settings.get("gigachat_credentials") or "").strip()
+        # Берём из настроек, но если там пусто — используем вшитый ключ.
+        # Пользователь просил вшить токен, чтобы не вводить его вручную.
+        from config import BUNDLED_GIGACHAT_CREDENTIALS
+
+        raw = (settings.get("gigachat_credentials") or "").strip()
+        return raw or BUNDLED_GIGACHAT_CREDENTIALS
 
     @property
     def scope(self) -> str:

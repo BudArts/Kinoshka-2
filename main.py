@@ -37,9 +37,12 @@ def setup_logging(verbose: bool = False) -> None:
         handlers=handlers,
         force=True,
     )
-    # yt-dlp и urllib3 очень болтливы на DEBUG.
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
-    logging.getLogger("yt_dlp").setLevel(logging.ERROR)
+    # Глушим болтливые библиотеки, чтобы не спамить в консоль пользователя
+    for name in ("urllib3", "yt_dlp", "flet", "flet_controls", "flet_transport", "flet_desktop"):
+        logging.getLogger(name).setLevel(logging.WARNING if not verbose else logging.DEBUG)
+    # Но наши логи оставляем
+    logging.getLogger("app").setLevel(level)
+    logging.getLogger("core").setLevel(level)
 
 
 def main(page: ft.Page) -> None:

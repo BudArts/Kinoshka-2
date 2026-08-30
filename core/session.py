@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Callable, List, Optional
+import time
+from typing import Callable, Dict, List, Optional, Tuple
 
 from config import settings
 from core.downloader import download_manager
@@ -23,6 +24,12 @@ from database import get_session, init_db
 from database.models import User
 
 log = logging.getLogger(__name__)
+
+# Простой кэш в памяти: (content_type, seeds_hash) -> (timestamp, items)
+_FEED_CACHE: Dict[Tuple[str, str], Tuple[float, List[MediaItem]]] = {}
+_SEARCH_CACHE: Dict[Tuple[str, str], Tuple[float, List[MediaItem]]] = {}
+_CACHE_TTL = 300  # 5 минут
+_SEARCH_TTL = 120  # 2 минуты для поиска
 
 
 class AppSession:
@@ -85,7 +92,7 @@ class AppSession:
         with self._lock:
             user = self.profiles.login(user_id, password)
             self._user = user
-            # Раз в сеанс подчищаем протухшие интересы.
+            self.clear_cache()
             try:
                 self.recommendations.decay_old_interests(
                     user.id, days=int(settings.get("interest_decay_days", 30))
@@ -99,6 +106,7 @@ class AppSession:
         with self._lock:
             self._user = None
             self.profiles.logout()
+            self.clear_cache()
         self._notify_user_changed()
 
     def try_restore_session(self) -> Optional[User]:
@@ -129,16 +137,32 @@ class AppSession:
     def search(
         self, query: str, content_type: str = "video", limit: int = 24
     ) -> List[MediaItem]:
-        """Поиск с записью запроса в историю и персонализацией выдачи."""
-        provider = self.provider_for(content_type)
-        items = provider.search(query, limit=limit)
+        """Поиск с кэшированием, записью запроса в историю и персонализацией."""
+        query = (query or "").strip()
+        if not query:
+            return []
+
+        cache_key = (content_type, query.lower())
+        now = time.time()
+        cached = _SEARCH_CACHE.get(cache_key)
+        if cached and (now - cached[0] < _SEARCH_TTL):
+            log.debug("Поиск из кэша: %s [%s]", query, content_type)
+            items = cached[1]
+        else:
+            provider = self.provider_for(content_type)
+            items = provider.search(query, limit=limit)
+            _SEARCH_CACHE[cache_key] = (now, items)
+            # Чистим старые записи, чтобы кэш не рос бесконечно
+            if len(_SEARCH_CACHE) > 100:
+                oldest = min(_SEARCH_CACHE.items(), key=lambda x: x[1][0])[0]
+                _SEARCH_CACHE.pop(oldest, None)
 
         if self.user_id and settings.get("save_history", True):
             try:
                 self.recommendations.track_search(
                     self.user_id,
                     query,
-                    platform=provider.name,
+                    platform=self.provider_for(content_type).name,
                     content_type=content_type,
                     results_count=len(items),
                 )
@@ -146,28 +170,58 @@ class AppSession:
                 log.debug("Не удалось записать поисковый запрос", exc_info=True)
 
         if self.user_id and items:
-            # Для поиска не выкидываем просмотренное: человек мог искать
-            # именно то, что уже смотрел.
-            items = self.recommendations.personalize(
-                self.user_id, items, drop_watched=False
-            )
+            items = self.recommendations.personalize(self.user_id, items, drop_watched=False)
         return items
 
     def feed(self, content_type: str = "video", limit: Optional[int] = None) -> List[MediaItem]:
-        """Персональная лента рекомендаций."""
+        """Персональная лента рекомендаций с кэшем."""
         limit = limit or int(settings.get("recommendations_count", 24))
-        provider = self.provider_for(content_type)
 
         seeds: List[str] = []
         if self.user_id:
-            seeds = self.recommendations.build_query_seeds(
-                self.user_id, count=6, content_type=content_type
-            )
+            try:
+                seeds = self.recommendations.build_query_seeds(
+                    self.user_id, count=4, content_type=content_type
+                )
+            except Exception:
+                seeds = []
 
+        # Ключ кэша — тип контента + интересы
+        seeds_key = "|".join(sorted(seeds)).lower() if seeds else "trending"
+        cache_key = (content_type, seeds_key)
+        now = time.time()
+        cached = _FEED_CACHE.get(cache_key)
+        if cached and (now - cached[0] < _CACHE_TTL):
+            log.debug("Лента из кэша: %s", content_type)
+            items = cached[1][:limit]
+            # Даже из кэша персонализируем, т.к. интересы могли обновиться
+            if self.user_id and items:
+                try:
+                    items = self.recommendations.personalize(self.user_id, items)
+                except Exception:
+                    pass
+            return items
+
+        provider = self.provider_for(content_type)
         items = provider.recommendations(seeds, limit=limit)
+
         if self.user_id and items:
-            items = self.recommendations.personalize(self.user_id, items)
+            try:
+                items = self.recommendations.personalize(self.user_id, items)
+            except Exception:
+                pass
+
+        _FEED_CACHE[cache_key] = (now, items)
+        if len(_FEED_CACHE) > 50:
+            oldest = min(_FEED_CACHE.items(), key=lambda x: x[1][0])[0]
+            _FEED_CACHE.pop(oldest, None)
+
         return items
+
+    def clear_cache(self) -> None:
+        """Очистить кэши — вызывается при смене профиля."""
+        _FEED_CACHE.clear()
+        _SEARCH_CACHE.clear()
 
     def download(self, item: MediaItem, *, audio_only: bool = False) -> Optional[int]:
         """Поставить элемент в очередь загрузки."""

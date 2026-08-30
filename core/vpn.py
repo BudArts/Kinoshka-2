@@ -262,43 +262,80 @@ class VpnManager:
         содержат параметры Jc/S1/H1/I1, которые обычный wg-quick не понимает.
         """
         if sys.platform == "win32":
-            names = ("amneziawg", "amnezia-wg") if amnezia else ("wireguard",)
-            paths = (
-                (
-                    r"C:\Program Files\AmneziaWG\amneziawg.exe",
-                    r"C:\Program Files\AmneziaVPN\amneziawg.exe",
+            # На Windows у AmneziaWG много вариантов установки — проверяем всё.
+            if amnezia:
+                names = (
+                    "amneziawg",
+                    "amnezia-wg",
+                    "awg-quick",
+                    "amneziawg-go",
                 )
-                if amnezia
-                else (
+                # Расширенный список возможных путей установки
+                possible_paths = [
+                    r"C:\Program Files\AmneziaWG\amneziawg.exe",
+                    r"C:\Program Files\AmneziaWG\client\amneziawg.exe",
+                    r"C:\Program Files\AmneziaVPN\amneziawg.exe",
+                    r"C:\Program Files\AmneziaVPN\client\amneziawg.exe",
+                    r"C:\Program Files (x86)\AmneziaWG\amneziawg.exe",
+                    r"C:\Program Files\AmneziaWG\amneziawg-service.exe",
+                    r"C:\Program Files\AmneziaWG\amnezia-wg.exe",
+                    r"C:\AmneziaWG\amneziawg.exe",
+                    # Пользователь может положить exe рядом с программой
+                    str((Path(sys.executable).parent / "amneziawg.exe").resolve()),
+                    str((Path.cwd() / "amneziawg.exe").resolve()),
+                ]
+            else:
+                names = ("wireguard", "wg-quick")
+                possible_paths = [
                     r"C:\Program Files\WireGuard\wireguard.exe",
                     r"C:\Program Files (x86)\WireGuard\wireguard.exe",
-                )
-            )
+                    r"C:\Program Files\WireGuard\wg.exe",
+                ]
+
             for name in names:
                 found = shutil.which(name)
                 if found:
                     return found
-            for candidate in paths:
+            for candidate in possible_paths:
                 if Path(candidate).is_file():
                     return candidate
             return None
 
-        return shutil.which("awg-quick") if amnezia else shutil.which("wg-quick")
+        # Linux / macOS — проверяем и awg-quick, и wg-quick, и полные пути
+        if amnezia:
+            for name in ("awg-quick", "amneziawg-quick", "amneziawg"):
+                found = shutil.which(name)
+                if found:
+                    return found
+            # Homebrew на macOS
+            for p in ("/opt/homebrew/bin/awg-quick", "/usr/local/bin/awg-quick"):
+                if Path(p).is_file():
+                    return p
+            return None
+        else:
+            found = shutil.which("wg-quick")
+            if found:
+                return found
+            for p in ("/opt/homebrew/bin/wg-quick", "/usr/local/bin/wg-quick"):
+                if Path(p).is_file():
+                    return p
+            return None
 
     @staticmethod
     def backend_hint(amnezia: bool = False) -> str:
         """Подсказка пользователю, чего не хватает."""
         if VpnManager.backend_available(amnezia):
             return (
-                "Клиент AmneziaWG найден."
+                "✓ Клиент AmneziaWG найден — VPN готов к работе."
                 if amnezia
-                else "Клиент WireGuard найден."
+                else "✓ Клиент WireGuard найден."
             )
         if amnezia:
             return (
-                "Конфигурации используют AmneziaWG (обфускация трафика). "
-                "Обычный WireGuard их не запустит — установите AmneziaWG "
-                "с amnezia.org или используйте прокси."
+                "⚠ Конфигурации используют AmneziaWG (обфускация). "
+                "Обычный WireGuard их не запустит. Установите AmneziaWG с amnezia.org "
+                "или скачайте amneziawg.exe и положите рядом с Kinoshka.exe. "
+                "Пока без VPN — включите системный VPN или прокси."
             )
         return (
             "Клиент WireGuard не найден. Установите его с wireguard.com "

@@ -79,6 +79,12 @@ class App:
         page.window.min_height = 520
         page.on_resized = self._on_resized
         page.on_close = self._on_close
+        # Очищаем overlay от возможных остатков FilePicker из старых версий,
+        # чтобы не было красного блока "Unknown control: FilePicker"
+        try:
+            page.overlay.clear()
+        except Exception:
+            pass
 
     @property
     def content_width(self) -> int:
@@ -141,9 +147,11 @@ class App:
         self.nav_container = ft.Container(
             content=self.navigator.navigator,
             bgcolor=COLORS["secondary"],
+            expand=False,
         )
 
-        self.content_area = ft.Container(expand=True)
+        # Область контента — с тем же фоном, чтобы не было серых дыр
+        self.content_area = ft.Container(expand=True, bgcolor=COLORS["bg"])
 
         self.page.controls.clear()
         self.page.add(

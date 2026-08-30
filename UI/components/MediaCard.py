@@ -147,7 +147,8 @@ class MediaCard(ft.Container):
     def _duration_badge(self) -> ft.Control:
         """Бейдж длительности. Для неизвестной длительности не рисуем вовсе."""
         if not self.item.duration:
-            return ft.Container(width=0, height=0)
+            # Пустой контейнер без размера — не должен давать серых артефактов
+            return ft.Container(content=ft.Text("", size=1), visible=False)
         return ft.Container(
             content=ft.Text(self.item.duration_human, size=11, color=ft.Colors.WHITE),
             bgcolor=ft.Colors.with_opacity(0.8, ft.Colors.BLACK),

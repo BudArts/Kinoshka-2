@@ -83,6 +83,14 @@ def ensure_dirs() -> None:
 # --------------------------------------------------------------------------- #
 #  Настройки
 # --------------------------------------------------------------------------- #
+# Встроенный ключ GigaChat — по просьбе пользователя вшит в программу,
+# чтобы не приходилось вводить его вручную. Если ключ протухнет,
+# его можно переопределить в настройках (поле остаётся доступным через
+# файл settings.json, но в UI не показывается).
+BUNDLED_GIGACHAT_CREDENTIALS = (
+    "YzNhMGVlNzYtYmNiNC00MTUyLWJkMjAtZGRlMjhkMzJkNzY5OjAyMWUwNjBhLTdkZTktNDY3Ni04NDEyLWZjZTlkYjM1NDI4OA=="
+)
+
 DEFAULT_SETTINGS: Dict[str, Any] = {
     # --- общие ---
     "theme": "dark",
@@ -109,16 +117,16 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "proxy_url": "",                   # запасной вариант: http:// или socks5://
     "request_timeout": 20,
     # --- ИИ-поиск ---
-    "ai_enabled": False,
+    "ai_enabled": True,                # включён по умолчанию — ключ вшит
     "ai_provider": "gigachat",          # gigachat / openai
-    # GigaChat (Сбер): ключ Basic из личного кабинета
-    "gigachat_credentials": "",
+    # GigaChat (Сбер): ключ Basic из личного кабинета — вшит по умолчанию
+    "gigachat_credentials": BUNDLED_GIGACHAT_CREDENTIALS,
     "gigachat_scope": "GIGACHAT_API_PERS",
     "gigachat_model": "GigaChat",
     # Сертификаты GigaChat подписаны Минцифры и обычно отсутствуют
     # в системном хранилище, поэтому по умолчанию проверку TLS не делаем.
     "gigachat_verify_ssl": False,
-    # OpenAI-совместимый сервис
+    # OpenAI-совместимый сервис (запасной)
     "ai_base_url": "https://api.openai.com/v1",
     "ai_api_key": "",
     "ai_model": "gpt-4o-mini",

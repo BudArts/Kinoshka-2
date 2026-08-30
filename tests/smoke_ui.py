@@ -127,7 +127,7 @@ check("MusicView пусто", lambda: (lambda v: (v._build_shell(), v._render([]
 check("LibraryView video", lambda: mk(LibraryView, "video", "Мои видео")._load())
 check("LibraryView music empty", lambda: mk(LibraryView, "music", "Моя музыка")._load())
 check("HistoryView", lambda: mk(HistoryView)._load())
-check("SettingsView", lambda: (lambda v: (v._ensure_file_picker(), v._load()))(mk(SettingsView)))
+check("SettingsView", lambda: (lambda v: v._load())(mk(SettingsView)))
 check("PlayerView render", lambda: mk(PlayerView)._render(items[0], "https://example.com/v.mp4"))
 check("PlayerView no stream", lambda: mk(PlayerView)._render(items[0], None))
 
