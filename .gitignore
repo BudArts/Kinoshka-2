@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Данные приложения (не должны попадать в репозиторий)
+*.db
+*.db-wal
+*.db-shm
+settings.json
+logs/
+downloads/
+cache/
+
+# Пользовательские VPN-конфигурации не коммитим (приватные ключи).
+# Исключение — вшитые пресеты в assets/vpn: это публичные ключи Cloudflare
+# WARP, они нужны, чтобы программа работала сразу после установки.
+/vpn/
+*.conf
+!assets/vpn/*.conf
+
+# Сборка
+build/
+dist/
+*.spec.bak
+installer_output/
+.devdata/

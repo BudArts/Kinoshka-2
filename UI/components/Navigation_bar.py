@@ -1,155 +1,113 @@
+"""Боковая навигация — максимально просто."""
+
+from __future__ import annotations
+
+from typing import Callable, List, Optional
+
 import flet as ft
-from UI.themes.DarkTheme import DarkTheme
+
+from UI.themes.DarkTheme import COLORS, FONT_BOLD
+
+NAV_ITEMS = [
+    (ft.Icons.HOME_ROUNDED, "Главная", "home"),
+    (ft.Icons.ONDEMAND_VIDEO_OUTLINED, "Видео", "video"),
+    (ft.Icons.CAMERA_ROLL_ROUNDED, "Фильмы и сериалы", "films"),
+    (ft.Icons.MUSIC_NOTE_SHARP, "Музыка", "music"),
+    (ft.Icons.VIDEO_LIBRARY, "Мои видео", "my_video"),
+    (ft.Icons.VIDEO_FILE, "Мои фильмы", "my_films"),
+    (ft.Icons.LIBRARY_MUSIC, "Моя музыка", "my_music"),
+    (ft.Icons.HISTORY_ROUNDED, "История", "history"),
+    (ft.Icons.SETTINGS_ROUNDED, "Настройки", "settings"),
+]
+
+EXPANDED_WIDTH = 220
+COLLAPSED_WIDTH = 64
+
 
 class NavLayout:
-    def __init__(self, icon, text: str, navigator, selected: bool = False ):
-        self._theme = DarkTheme()
+    def __init__(self, icon: str, text: str, route: str, navigator: "Navigator", selected: bool = False):
         self._text = text
-        self._animation = ft.Animation(
-            duration=300, curve=ft.AnimationCurve.EASE_OUT
-        )
-        self._selected = selected
-        self._icon = icon
+        self._route = route
         self._navigator = navigator
-        
+        self._selected = selected
+
+        self._icon_control = ft.Icon(icon, color=ft.Colors.WHITE if selected else COLORS["muted"], size=20)
+        self._label = ft.Text(text, color=ft.Colors.WHITE if selected else COLORS["muted"], size=13, max_lines=2, font_family=FONT_BOLD if selected else "A", width=120)
+
         self.layout = ft.Container(
-            content=ft.Row(
-                controls=[
-                    ft.Container(
-                        height=40,
-                        border_radius=5,
-                        width=0,
-                        gradient=ft.LinearGradient(
-                            colors=[
-                                self._theme._main_colors["gradient1"],
-                                self._theme._main_colors["gradient2"]
-                            ],
-                            tile_mode=ft.GradientTileMode.CLAMP,
-                            begin=ft.Alignment.BOTTOM_LEFT,
-                            end=ft.Alignment.TOP_RIGHT
-                        ),
-                        animate=self._animation,
-                    ),
-                    ft.Icon(self._icon, color=ft.Colors.WHITE, animate_scale=self._animation, margin=10),
-                    ft.Text(self._text,
-                            color=ft.Colors.WHITE,
-                            size=16,
-                            animate_scale=self._animation,
-                            text_align=ft.Alignment.CENTER,
-                            max_lines=2,
-                            overflow=ft.TextOverflow.CLIP,
-                            width=85,
-                            font_family="A")
-
-                ],
-                spacing=10,
-            ),
+            content=ft.Row(controls=[self._icon_control, self._label], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             border_radius=8,
-            width=200,
-            on_hover=self.hovered,
-            animate=self._animation,
-            animate_scale=self._animation,
-            padding=ft.Padding(10, 0, 0, 0),
-            on_click=self.clicked,
-            data=text,
+            height=44,
+            padding=ft.Padding(10, 0, 10, 0),
+            bgcolor=COLORS["surface"] if selected else ft.Colors.TRANSPARENT,
+            on_click=self._click,
+            tooltip=text,
         )
-        if self._selected:
-            row = self.layout.content
-            grad_bar = row.controls[0]
-            text = row.controls[2]
-            icon = row.controls[1]
-            grad_bar.width = 8
-            text.scale = 1.2
-            icon.scale = 1.2
-            self.layout.padding = ft.Padding(20, 0, 0, 0)
-    
-    def hovered(self, e: ft.HoverEvent):
-        if self._selected:
-            return
-        row = self.layout.content
-        grad_bar = row.controls[0]
-        icon = row.controls[1]
-        text = row.controls[2]
-        
-        if e.data:
-            grad_bar.width = 8
-            text.scale = 1.2
-            icon.scale = 1.2
-            self.layout.padding = ft.Padding(40, 0, 0, 0)
-        else:
-            text.scale = 1.0
-            icon.scale = 1.0
-            grad_bar.width = 0
-            self.layout.scale = 1.0
-            self.layout.padding = ft.Padding(10, 0, 0, 0)
-            
-        grad_bar.update()
-        self.layout.update()
-    
-    def select(self):
-        self._selected = True
-        row = self.layout.content
-        grad_bar = row.controls[0]
-        grad_bar.width = 8
-        icon = row.controls[1]
-        text = row.controls[2]
-        text.scale = 1.2
-        icon.scale = 1.2
-        self.layout.scale = 1.1
-        self.layout.padding = ft.Padding(20, 0, 0, 0)
 
-    def unselect(self):
+    def set_collapsed(self, collapsed: bool) -> None:
+        self._label.visible = not collapsed
+
+    def _click(self, e) -> None:
+        self._navigator.select(self._route)
+
+    def select(self) -> None:
+        self._selected = True
+        self._icon_control.color = ft.Colors.WHITE
+        self._label.color = ft.Colors.WHITE
+        self._label.font_family = FONT_BOLD
+        self.layout.bgcolor = COLORS["surface"]
+        self._safe_update()
+
+    def unselect(self) -> None:
         self._selected = False
-        row = self.layout.content
-        grad_bar = row.controls[0]
-        icon = row.controls[1]
-        text = row.controls[2]
-        text.scale = 1.0
-        icon.scale = 1.0
-        grad_bar.width = 0
-        self.layout.scale = 1.0
-        self.layout.padding = ft.Padding(10, 0, 0, 0)
-     
-    def clicked(self, e):
-        self._navigator.unselect_all()
-        self.select()
-        for item in self._navigator.nav_items:
-            item.layout.update()
-        if self._navigator.on_select:
-            self._navigator.on_select(self._text)
+        self._icon_control.color = COLORS["muted"]
+        self._label.color = COLORS["muted"]
+        self._label.font_family = "A"
+        self.layout.bgcolor = ft.Colors.TRANSPARENT
+        self._safe_update()
+
+    def _safe_update(self) -> None:
+        try:
+            self.layout.update()
+        except Exception:
+            pass
+
 
 class Navigator:
-    def __init__(self, on_select=None):
+    def __init__(self, on_select: Optional[Callable[[str], None]] = None, initial: str = "home"):
         self.on_select = on_select
-        self.nav_items = []
-        
-        self.nav_items = [
-            NavLayout(ft.Icons.HOME, "Главная", self, selected=True),
-            NavLayout(ft.Icons.ONDEMAND_VIDEO_OUTLINED, "Видео", self),
-            NavLayout(ft.Icons.CAMERA_ROLL_ROUNDED, "Фильмы и сериалы", self),
-            NavLayout(ft.Icons.MUSIC_NOTE_SHARP, "Музыка", self),
-            NavLayout(ft.Icons.VIDEO_LIBRARY, "Мои видео", self),
-            NavLayout(ft.Icons.VIDEO_FILE, "Мои фильмы", self),
-            NavLayout(ft.Icons.LIBRARY_MUSIC, "Моя музыка", self),
-            NavLayout(ft.Icons.ELECTRIC_BOLT, "Джарвис", self),
-            NavLayout(ft.Icons.SETTINGS_ROUNDED, "Настройки", self),
-                   ]
-        
-        self.navigator = ft.Column(
-            controls=[item.layout for item in self.nav_items],
-            width=200,
+        self.current = initial
+        self._collapsed = False
+        self.nav_items: List[NavLayout] = [NavLayout(icon, text, route, self, selected=(route == initial)) for icon, text, route in NAV_ITEMS]
+        self.navigator = ft.Container(
+            content=ft.Column(controls=[item.layout for item in self.nav_items], spacing=2, scroll=ft.ScrollMode.AUTO, expand=True),
+            width=EXPANDED_WIDTH,
+            padding=ft.Padding(8, 10, 8, 10),
+            bgcolor=COLORS["secondary"],
         )
-    
-    def unselect_all(self):
+
+    def select(self, route: str, notify: bool = True) -> None:
         for item in self.nav_items:
-            if item._selected:
+            if item._route == route:
+                item.select()
+            elif item._selected:
                 item.unselect()
-    
-    def select_item(self, index):
-        if 0 <= index < len(self.nav_items):
-            self.unselect_all()
-            self.nav_items[index].select()
-            for item in self.nav_items:
-                item.layout.update()
-            if self.on_select:
-                self.on_select(self.nav_items[index]._text)
+        self.current = route
+        if notify and self.on_select:
+            self.on_select(route)
+
+    def set_collapsed(self, collapsed: bool) -> None:
+        if collapsed == self._collapsed:
+            return
+        self._collapsed = collapsed
+        self.navigator.width = COLLAPSED_WIDTH if collapsed else EXPANDED_WIDTH
+        for item in self.nav_items:
+            item.set_collapsed(collapsed)
+        try:
+            self.navigator.update()
+        except Exception:
+            pass
+
+    @property
+    def collapsed(self) -> bool:
+        return self._collapsed
